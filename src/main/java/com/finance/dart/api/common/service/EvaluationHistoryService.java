@@ -58,6 +58,9 @@ public class EvaluationHistoryService {
             e.setCurrentPrice(toBigDecimal(r.getCurrentPrice()));
             e.setFairValue(toBigDecimal(r.getFairValue()));
             e.setPurchasePrice(toBigDecimal(r.getPurchasePrice()));
+            // 발행주식수는 계산 상세에만 있음 (분할·병합 판별용, 미제공 종목은 null)
+            e.setSharesOutstanding(r.getResultDetail() != null
+                    ? toBigDecimal(r.getResultDetail().get발행주식수()) : null);
             e.setCreatedAt(LocalDateTime.now());
             entities.add(e);
         }

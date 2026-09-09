@@ -77,6 +77,13 @@ public class EvaluationHistoryEntity {
     @Column(name = "purchase_price", precision = 20, scale = 4)
     private BigDecimal purchasePrice;       // 매수적정가
 
+    /**
+     * 발행주식수 - 액면분할·주식병합 판별용
+     * 분할·병합 때만 배수로 변하고 실적 발표로는 변하지 않아, 조회 구간이 길어도 판별력이 유지된다.
+     */
+    @Column(name = "shares_outstanding", precision = 30, scale = 0)
+    private BigDecimal sharesOutstanding;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 }
