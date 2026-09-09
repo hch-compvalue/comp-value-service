@@ -27,7 +27,7 @@ public class RecommendedStocks {
     private final RecommendedStocksEvaluator recommendedStocksEvaluator;
 
     @TransactionLogging
-    @Scheduled(cron = "0 0 0 * * *") // 24시간 형식, 초 분 시 일 월 요일, 00시(오전12시) 시작
+    @Scheduled(cron = "0 0 10 * * *") // 24시간 형식, 초 분 시 일 월 요일, 10시(오전) 시작 - 미국장 종가 확정 후 실행
     public void startScheduledTask() {
         executorService.submit(this::processDataInBackground);
     }

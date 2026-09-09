@@ -16,7 +16,7 @@ import java.util.function.Function;
 
 /**
  * 수익률 추적 서비스 (2-4)
- * - 야간 평가가 매일 저장한 current_price만으로 수익률 계산 (추가 FMP 호출 없음)
+ * - 일별 평가가 매일 저장한 current_price만으로 수익률 계산 (추가 FMP 호출 없음)
  * - "특정 기준일의 투자판정/가치등급별로 이후 실제 수익률이 어땠는가" 집계 → 신뢰도 데이터 검증
  */
 @Slf4j
