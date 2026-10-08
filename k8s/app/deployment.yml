@@ -23,7 +23,7 @@ spec:
     spec:
       containers:
         - name: comp-value-service
-          image: ghcr.io/gnsgmlckdgk/comp-value-service:latest  # 스프링부트 이미지
+          image: ghcr.io/hch-compvalue/comp-value-service:latest  # 스프링부트 이미지
           imagePullPolicy: Always     # 매번 pull
           ports:
             - containerPort: 18080          # 앱 내부 리스닝 포트

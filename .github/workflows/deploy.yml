@@ -5,7 +5,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: gnsgmlckdgk/comp-value-service
+  IMAGE_NAME: hch-compvalue/comp-value-service
 
 jobs:
   # 작업의 고유 식별자
@@ -138,7 +138,7 @@ jobs:
       - name: Checkout infra repo
         uses: actions/checkout@v4
         with:
-          repository: gnsgmlckdgk/comp-value-gos
+          repository: hch-compvalue/comp-value-gos
           token: ${{ secrets.GOS_DEPLOY_PAT }}
           ref: main
 
@@ -148,7 +148,7 @@ jobs:
       - name: Update image tag
         run: |
           cd ncloud/backend/app
-          kustomize edit set image ghcr.io/gnsgmlckdgk/comp-value-service=ghcr.io/gnsgmlckdgk/comp-value-service:sha-${GITHUB_SHA::7}
+          kustomize edit set image ghcr.io/hch-compvalue/comp-value-service=ghcr.io/hch-compvalue/comp-value-service:sha-${GITHUB_SHA::7}
           # 재실행(같은 commit SHA)이라도 run마다 고유 annotation을 찍어 manifest diff를 만들어 ArgoCD 롤아웃을 보장
           kustomize edit set annotation compvalue.xyz/deployed-run:"${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
 
