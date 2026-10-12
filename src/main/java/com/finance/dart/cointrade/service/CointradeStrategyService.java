@@ -61,6 +61,18 @@ public class CointradeStrategyService {
         }
     }
 
+    /** 긴급 전량 매도 + 중지 (body: {"confirm": "매도"}) */
+    public Map<String, Object> emergencyExit(Map<String, Object> body) {
+        log.warn("전략 긴급 전량 매도 요청");
+        try {
+            return httpClientComponent.exchangeSyncWithTimeout(
+                    buildUrl(CoinTraderProgramConfig.API_URI_STRATEGY_EMERGENCY_EXIT),
+                    HttpMethod.POST, null, body, MAP_TYPE, RUN_READ_TIMEOUT_MS).getBody();
+        } catch (HttpStatusCodeException e) {
+            throw new BizException(extractDetail(e));
+        }
+    }
+
     private Map<String, Object> call(String uri, HttpMethod method, Object body) {
         try {
             return httpClientComponent.exchangeSync(buildUrl(uri), method, null, body, MAP_TYPE).getBody();

@@ -27,6 +27,9 @@ public class CoinTraderProgramConfig {
     /** [v5.0 전략] 즉시 실행 **/
     public static final String API_URI_STRATEGY_RUN = "api/strategy/run";
 
+    /** [v5.0 전략] 긴급 전량 매도 + 중지 **/
+    public static final String API_URI_STRATEGY_EMERGENCY_EXIT = "api/strategy/emergency-exit";
+
     /** 매수 프로세스 시작 시간 조회 API URI **/
     public static final String API_URI_BUY_NEXT_RUN = "api/scheduler/next-run";
 

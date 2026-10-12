@@ -57,4 +57,12 @@ public class CointradeStrategyController {
     public ResponseEntity<CommonResponse<Map<String, Object>>> runNow() {
         return new ResponseEntity<>(new CommonResponse<>(strategyService.runNow()), HttpStatus.OK);
     }
+
+    /** POST /api/cointrade/strategy/emergency-exit  body: {"confirm": "매도"} */
+    @EndPointConfig.RequireRole({RoleConstants.ROLE_SUPER_ADMIN})
+    @TransactionLogging
+    @PostMapping("/emergency-exit")
+    public ResponseEntity<CommonResponse<Map<String, Object>>> emergencyExit(@RequestBody Map<String, Object> body) {
+        return new ResponseEntity<>(new CommonResponse<>(strategyService.emergencyExit(body)), HttpStatus.OK);
+    }
 }
