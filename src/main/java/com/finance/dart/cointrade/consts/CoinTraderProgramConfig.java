@@ -15,6 +15,18 @@ public class CoinTraderProgramConfig {
 
     // API
 
+    /** [v5.0 전략] 상태 조회 **/
+    public static final String API_URI_STRATEGY_STATUS = "api/strategy/status";
+
+    /** [v5.0 전략] 실행 기록 **/
+    public static final String API_URI_STRATEGY_RUNS = "api/strategy/runs";
+
+    /** [v5.0 전략] 설정 변경 (모드/투자금/실행시각) **/
+    public static final String API_URI_STRATEGY_SETTINGS = "api/strategy/settings";
+
+    /** [v5.0 전략] 즉시 실행 **/
+    public static final String API_URI_STRATEGY_RUN = "api/strategy/run";
+
     /** 매수 프로세스 시작 시간 조회 API URI **/
     public static final String API_URI_BUY_NEXT_RUN = "api/scheduler/next-run";
 
