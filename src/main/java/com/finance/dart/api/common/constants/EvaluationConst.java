@@ -8,7 +8,7 @@ public class EvaluationConst {
     /**
      * Redis 키 버전
      */
-    public static final String CAL_VALUE_VERSION = "v8";
+    public static final String CAL_VALUE_VERSION = "v9";
 
     /**
      * 각 Step별 가중치 (총 100점)
@@ -141,5 +141,32 @@ public class EvaluationConst {
     public static final long QUALITY_GATE_MICROCAP = 300_000_000L;      // 초소형주 기준 $300M
     public static final double QUALITY_GATE_UNREALISTIC_GAP_PCT = 200.0; // 비현실적 괴리(계산신뢰도 낮음): 매수후보→관심목록, 가치점수 하향
     public static final double QUALITY_GATE_OUTLIER_GAP_PCT = 2000.0;    // 이상치 괴리: 관망으로 강등
+
+    // ========== V9 적정가 수준 보정 (2026-10-13) ==========
+    // V9(자기자본법+정상금리 6% 이자하한)는 적정가 수준이 V8보다 낮음(괴리 중앙값 -16% → -45%). 순위 예측력은 개선됐으므로
+    // 각 점수 구간에 드는 종목 비율이 V8과 같도록 기준을 분위 매칭으로 이동 (test/backtest-v8-2026-10, 2018~2025 11,659건)
+    // 괄호 = V8 기준값. 안전마진(매수적정가)은 보수적 의미 유지를 위해 보정하지 않음
+    /** Step3 가격괴리 6점 구간 하한 % (V8 +30) */
+    public static final double STEP3_GAP_UNDERVALUED_PCT = -8.0;
+    /** Step3 가격괴리 5점 구간 하한 % (V8 +20) */
+    public static final double STEP3_GAP_SLIGHT_UNDERVALUED_PCT = -14.0;
+    /** Step3 가격괴리 4점 구간 하한 % (V8 +10) */
+    public static final double STEP3_GAP_MILD_UNDERVALUED_PCT = -21.0;
+    /** Step3 가격괴리 2점 구간 하한 % (V8 0) */
+    public static final double STEP3_GAP_FAIR_PCT = -27.0;
+    /** Step3 가격괴리 1점 구간 하한 % (V8 -10), 미만은 고평가 0점 */
+    public static final double STEP3_GAP_SLIGHT_OVERVALUED_PCT = -36.0;
+
+    /** Step5 그레이엄 고평가 감점 50% 시작 괴리 % (V8 -10) */
+    public static final double STEP5_OVERVALUED_PENALTY_HALF_PCT = -36.0;
+    /** Step5 그레이엄 고평가 감점 75% 시작 괴리 % (V8 -20) */
+    public static final double STEP5_OVERVALUED_PENALTY_MOST_PCT = -42.0;
+    /** Step5 그레이엄 고평가 감점 100% 시작 괴리 % (V8 -30) */
+    public static final double STEP5_OVERVALUED_PENALTY_FULL_PCT = -50.0;
+
+    /** Step5 매수적정가 미달 시 적정가 상승여력 4점 하한 % (V8 +10) */
+    public static final double STEP5_FAIR_GAP_HIGH_PCT = -21.0;
+    /** Step5 매수적정가 미달 시 적정가 상승여력 2점 하한 % (V8 0) */
+    public static final double STEP5_FAIR_GAP_LOW_PCT = -27.0;
 
 }

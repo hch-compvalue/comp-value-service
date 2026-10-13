@@ -571,21 +571,22 @@ public class StockEvaluationService {
                     if (Math.abs(gap) >= EvaluationConst.QUALITY_GATE_UNREALISTIC_GAP_PCT) {
                         score += 1;
                         details.append(String.format("⚠️ 가격차이 %.1f%% (비현실적 괴리 - 계산 신뢰도 낮음, +1점). ", gap));
-                    } else if (gap >= 30) {
+                    // V9 적정가는 보수적이라 괴리가 음수여도 상대적으로 저평가일 수 있음 → '구간' 표현 + 기준 병기
+                    } else if (gap >= EvaluationConst.STEP3_GAP_UNDERVALUED_PCT) {
                         score += 6;
-                        details.append(String.format("✅ 가격차이 %.1f%% (저평가, +6점). ", gap));
-                    } else if (gap >= 20) {
+                        details.append(String.format("✅ 가격차이 %.1f%% (저평가 구간 ≥%.0f%%, +6점). ", gap, EvaluationConst.STEP3_GAP_UNDERVALUED_PCT));
+                    } else if (gap >= EvaluationConst.STEP3_GAP_SLIGHT_UNDERVALUED_PCT) {
                         score += 5;
-                        details.append(String.format("✅ 가격차이 %.1f%% (약간 저평가, +5점). ", gap));
-                    } else if (gap >= 10) {
+                        details.append(String.format("✅ 가격차이 %.1f%% (약간 저평가 구간 ≥%.0f%%, +5점). ", gap, EvaluationConst.STEP3_GAP_SLIGHT_UNDERVALUED_PCT));
+                    } else if (gap >= EvaluationConst.STEP3_GAP_MILD_UNDERVALUED_PCT) {
                         score += 4;
-                        details.append(String.format("✅ 가격차이 %.1f%% (소폭 저평가, +4점). ", gap));
-                    } else if (gap >= 0) {
+                        details.append(String.format("✅ 가격차이 %.1f%% (소폭 저평가 구간 ≥%.0f%%, +4점). ", gap, EvaluationConst.STEP3_GAP_MILD_UNDERVALUED_PCT));
+                    } else if (gap >= EvaluationConst.STEP3_GAP_FAIR_PCT) {
                         score += 2;
-                        details.append(String.format("⚠️ 가격차이 %.1f%% (적정가 수준, +2점). ", gap));
-                    } else if (gap >= -10) {
+                        details.append(String.format("⚠️ 가격차이 %.1f%% (적정가 수준 구간 ≥%.0f%%, +2점). ", gap, EvaluationConst.STEP3_GAP_FAIR_PCT));
+                    } else if (gap >= EvaluationConst.STEP3_GAP_SLIGHT_OVERVALUED_PCT) {
                         score += 1;
-                        details.append(String.format("⚠️ 가격차이 %.1f%% (약간 고평가, +1점). ", gap));
+                        details.append(String.format("⚠️ 가격차이 %.1f%% (약간 고평가 구간 ≥%.0f%%, +1점). ", gap, EvaluationConst.STEP3_GAP_SLIGHT_OVERVALUED_PCT));
                     } else {
                         score += 0;
                         details.append(String.format("❌ 가격차이 %.1f%% (고평가, +0점). ", gap));
@@ -722,8 +723,7 @@ public class StockEvaluationService {
         double score = 0;
         StringBuilder details = new StringBuilder();
 
-        // 과대평가 단계적 감점: 적정가 대비 고평가 비율에 따라 그레이엄 점수 감산
-        // 0%~-10%: 감점 없음, -10%~-20%: 50% 감점, -20%~-30%: 75% 감점, -30% 이하: 100% 차단
+        // 과대평가 단계적 감점: 적정가 대비 고평가 비율에 따라 그레이엄 점수 감산 (구간은 EvaluationConst V9 보정값)
         double overvaluedPenalty = 0.0;  // 0.0=감점없음, 1.0=전액차단
         String fairValueStr = result.get주당가치();
         if (!StringUtil.isStringEmpty(fairValueStr) && !StringUtil.isStringEmpty(currentPrice)) {
@@ -735,11 +735,11 @@ public class StockEvaluationService {
                         overvaluedPenalty = 1.0;
                     } else {
                         double gapPct = (fair - current) / current * 100;
-                        if (gapPct < -30) {
+                        if (gapPct < EvaluationConst.STEP5_OVERVALUED_PENALTY_FULL_PCT) {
                             overvaluedPenalty = 1.0;
-                        } else if (gapPct < -20) {
+                        } else if (gapPct < EvaluationConst.STEP5_OVERVALUED_PENALTY_MOST_PCT) {
                             overvaluedPenalty = 0.75;
-                        } else if (gapPct < -10) {
+                        } else if (gapPct < EvaluationConst.STEP5_OVERVALUED_PENALTY_HALF_PCT) {
                             overvaluedPenalty = 0.5;
                         }
                     }
@@ -766,16 +766,16 @@ public class StockEvaluationService {
                         details.append(String.format("✅ 매수적정가 $%.2f > 현재가 $%.2f (매수 적합, +7점). ",
                                 purchasePrice, current));
                     }
-                } else if (fair > current) {
+                } else if (fair > 0 && current > 0 && (fair - current) / current * 100 >= EvaluationConst.STEP5_FAIR_GAP_LOW_PCT) {
                     double fairGapPct = (fair - current) / current * 100;
-                    if (fairGapPct >= 10) {
+                    if (fairGapPct >= EvaluationConst.STEP5_FAIR_GAP_HIGH_PCT) {
                         score += 4;
-                        details.append(String.format("✅ 적정가 $%.2f > 현재가 $%.2f (%.1f%% 상승여력, +4점). ",
+                        details.append(String.format("✅ 적정가 $%.2f / 현재가 $%.2f (괴리 %.1f%%, 상대 상승여력 구간, +4점). ",
                                 fair, current, fairGapPct));
                     } else {
                         score += 2;
-                        details.append(String.format("⚠️ 적정가 $%.2f > 현재가 $%.2f (소폭 상승여력, +2점). ",
-                                fair, current));
+                        details.append(String.format("⚠️ 적정가 $%.2f / 현재가 $%.2f (괴리 %.1f%%, 적정가 수준 구간, +2점). ",
+                                fair, current, fairGapPct));
                     }
                 } else {
                     details.append(String.format("❌ 매수적정가 $%.2f ≤ 현재가 $%.2f (+0점). ",

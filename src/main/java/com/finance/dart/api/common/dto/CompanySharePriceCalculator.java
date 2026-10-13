@@ -226,4 +226,17 @@ public class CompanySharePriceCalculator {
     @SerializedName("industry")
     private String industry;
 
+    // V9 자기자본법용 ====================================
+    /**
+     * 이자비용 (최근 연간, V9 세후 이익 산출용)
+     */
+    @SerializedName("interestExpense")
+    private String interestExpense;
+
+    /**
+     * 유효세율 (최근 연간 법인세/세전이익, V9). 비어 있으면 기본세율 사용
+     */
+    @SerializedName("effectiveTaxRate")
+    private String effectiveTaxRate;
+
 }

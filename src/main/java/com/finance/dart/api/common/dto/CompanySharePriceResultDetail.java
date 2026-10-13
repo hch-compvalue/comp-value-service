@@ -126,6 +126,11 @@ public class CompanySharePriceResultDetail {
     private String targetPBR = "N/A";
     private String 실제PBR = "N/A";
 
+    /** V9 자기자본법 **/
+    private String 적용세율 = "N/A";            // 세후 이익 산출에 쓴 세율 (유효세율 or 기본값)
+    private String 이자비용 = "N/A";            // 영업이익에서 차감한 이자비용 = max(실제 이자, 총부채×정상금리 6%)
+    private String 세후수익가치 = "N/A";         // (영업이익-이자)×(1-세율)×PER×분기추세
+
     public CompanySharePriceResultDetail(String unit) {
         this.단위 = unit;
     }
