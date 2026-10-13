@@ -22,6 +22,7 @@ import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 
@@ -476,7 +477,36 @@ public class RecommendedStocksProcessor {
             }
         }
 
+        // 5. 적자·자본잠식 배제: 배수 상한(PER≤N, PBR≤N)은 이익·자본이 양수일 때만 '저평가' 의미가 있음
+        //    (음수 PER/PBR 은 상한을 항상 통과, 순이익·자본이 모두 음수면 ROE 가 양수로 계산돼 ROE 하한도 통과)
+        //    하한을 0 미만으로 명시한 경우만 음수 허용
+        if (isMultipleFilterSet(config.getPeRatioMin(), config.getPeRatioMax())
+                && isNonPositiveExcluded(pe, config.getPeRatioMin())) {
+            validPE = false;
+        }
+        if (isMultipleFilterSet(config.getPbRatioMin(), config.getPbRatioMax())
+                && isNonPositiveExcluded(pb, config.getPbRatioMin())) {
+            validPB = false;
+        }
+        boolean negativeEquity = pb != null && pb < 0;
+        if (negativeEquity && isMultipleFilterSet(config.getRoeMin(), config.getRoeMax())) {
+            validROE = false;
+        }
+        if (negativeEquity && isMultipleFilterSet(config.getDebtEquityMin(), config.getDebtEquityMax())) {
+            validDebt = false;
+        }
+
         return validPE && validPB && validROE && validDebt;
+    }
+
+    private static boolean isMultipleFilterSet(BigDecimal min, BigDecimal max) {
+        return min != null || max != null;
+    }
+
+    /** 값이 0 이하이고, 하한이 음수로 명시되지 않았으면 제외 대상 */
+    private static boolean isNonPositiveExcluded(Double value, BigDecimal min) {
+        boolean negativeAllowed = min != null && min.signum() < 0;
+        return value != null && value <= 0 && !negativeAllowed;
     }
 
     /**

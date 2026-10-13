@@ -26,6 +26,9 @@ public class PerShareValueCalculationService {
 
     private final PerShareValueCalcHelper calcHelper;
 
+    /** 주당가치 소수 자릿수 (센트) */
+    private static final int PER_SHARE_SCALE = 2;
+
     /**
      * V8: 적정가 계산
      * - PER 블렌딩: min(actualPER, sectorPER×1.5)×0.6 + sectorPER×0.4
@@ -276,6 +279,13 @@ public class PerShareValueCalculationService {
         // STEP01에 분기 추세팩터 적용
         STEP01 = CalUtil.multi(STEP01, quarterlyTrendFactor.toPlainString());
 
+        // 수익가치 하한 0: 음수 영업이익 × PER 이 자산가치를 깎거나, 음수에 추세할인(<1)을 곱해
+        // 실적이 악화될수록 적정가가 오르는 역전 방지 → 수익가치 없음 = 자산가치만으로 평가
+        if (new BigDecimal(STEP01).signum() < 0) {
+            log.debug("[V8] 수익가치 음수 → 0 하한 적용: {}", STEP01);
+            STEP01 = "0";
+        }
+
         resultDetail.setPER(per);
         resultDetail.set영업이익성장률(incomGrowth);
         resultDetail.set성장률보정PER(adjustedPER);
@@ -301,7 +311,7 @@ public class PerShareValueCalculationService {
         String rst01 = CalUtil.add(STEP01, STEP02);
         String rst02 = CalUtil.add(rst01, STEP03);
         String rst04 = CalUtil.sub(rst02, STEP05);
-        String result = CalUtil.divide(rst04, issuedShares, RoundingMode.HALF_EVEN);
+        String result = divideToPerShare(rst04, issuedShares);
 
         if(log.isDebugEnabled()) {
             log.debug("[V8 계산] 섹터:{}, 연간추세:{}, 분기추세:{}, STEP01:{}, STEP02:{}, STEP03:{}, STEP05:{}, 결과:{}",
@@ -423,6 +433,19 @@ public class PerShareValueCalculationService {
         }
 
         return fairValue.toPlainString();
+    }
+
+    /**
+     * V8: 기업가치 → 주당가치 (소수 2자리, 센트 단위)
+     * - 기존 CalUtil.divide(3인자)는 정수 반올림이라 저가주 오차가 큼($1.49 → $1). PBR 경로와 동일하게 2자리로 통일
+     * - 발행주식수 없음/0 이면 "0" (기존 CalUtil.divide 동작 유지)
+     */
+    String divideToPerShare(String enterpriseValue, String issuedShares) {
+        if (StringUtil.isStringEmpty(issuedShares) || new BigDecimal(issuedShares.replace(",", "")).signum() == 0) {
+            return "0";
+        }
+        String value = StringUtil.isStringEmpty(enterpriseValue) ? "0" : enterpriseValue;
+        return CalUtil.divide(value, issuedShares, PER_SHARE_SCALE, RoundingMode.HALF_EVEN);
     }
 
     /**

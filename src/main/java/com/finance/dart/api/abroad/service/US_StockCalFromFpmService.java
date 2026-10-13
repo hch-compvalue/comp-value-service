@@ -108,7 +108,8 @@ public class US_StockCalFromFpmService {
     private CompanySharePriceCalculator getCalParamDataV8(String symbol, CompanySharePriceResult result,
                                                            CompanySharePriceResultDetail resultDetail,
                                                            StockQuoteResDto stockQuote,
-                                                           List<StockPriceVolumeResDto> priceHistory)
+                                                           List<StockPriceVolumeResDto> priceHistory,
+                                                           String sector)
             throws InterruptedException {
 
         if(log.isDebugEnabled()) log.debug("[V8 계산 로그] [{}] {} 계산 시작", symbol, result.get기업명());
@@ -291,7 +292,10 @@ public class US_StockCalFromFpmService {
         }
 
         //@ PBR 기반 평가 데이터 (Financial Services)
-        if (SectorParameterFactory.getParameters(result.get섹터()).isUsePbrValuation()) {
+        // - 섹터는 프로필 조회값을 인자로 받음 (result.섹터는 계산 후에야 세팅되므로 사용 불가)
+        // - BPS(ratios-TTM)는 환율 변환이 안 되므로 USD 공시 기업만 PBR 경로 허용, 그 외는 PER 경로 유지
+        boolean usdReporter = CurrencyConst.USA.equals(balance.get(0).getReportedCurrency());
+        if (SectorParameterFactory.getParameters(sector).isUsePbrValuation() && usdReporter) {
             Double bps = financialRatios.get(0).getBookValuePerShareTTM();
             Double netIncomePS = financialRatios.get(0).getNetIncomePerShareTTM();
             Double equityPS = financialRatios.get(0).getShareholdersEquityPerShareTTM();
@@ -415,7 +419,7 @@ public class US_StockCalFromFpmService {
         }
 
         //@2. 재무 데이터 조회
-        CompanySharePriceCalculator calParam = getCalParamDataV8(symbol, result, resultDetail, stockQuote, priceHistory);
+        CompanySharePriceCalculator calParam = getCalParamDataV8(symbol, result, resultDetail, stockQuote, priceHistory, sector);
         if(calParam == null) {
             helper.errorProcess(result, "재무정보 조회에 실패했습니다.");
             return result;
@@ -441,17 +445,59 @@ public class US_StockCalFromFpmService {
         if(log.isDebugEnabled()) log.debug("[V8] {} - 계산 입력: PER={}, 섹터={}", symbol, calParam.getPer(), sector);
         String 계산된주당가치 = sharePriceCalculatorService.calPerValueV8(calParam, resultDetail, sector);
 
-        //@4. V8: 동적 안전마진 ---------------------------------
+        //@4. 그레이엄 스크리닝 (안전마진이 통과수를 사용하므로 먼저 수행) ---------------------------------
+        applyGrahamScreeningV8(symbol, sector, calParam, resultDetail, pbrTTM);
+
+        //@5. V8: 동적 안전마진 ---------------------------------
         double totalMargin = calcHelper.calculateDynamicSafetyMargin(
                 companyProfile.getBeta(), resultDetail.get그레이엄_통과수());
         resultDetail.set안전마진율(String.format("%.0f%%", totalMargin * 100));
 
-        //@5. 매매가 산출 ---------------------------------
+        //@6. 매매가 산출 ---------------------------------
         String 매수적정가 = calcHelper.calculatePurchasePrice(계산된주당가치, totalMargin);
         String 목표매도가 = calcHelper.calculateSellTarget(계산된주당가치);
         String 손절매가 = calcHelper.calculateStopLoss(매수적정가);
 
-        //@6. 그레이엄 스크리닝 ---------------------------------
+        //@7. AI 예측값 조회 ---------------------------------
+        PredictionResponseDto predictionResponseDto = helper.predictWeeklyHigh(symbol);
+
+        //@8. 결과 조립 ---------------------------------
+        result.set버전(VERSION.toUpperCase());
+        result.set섹터(sector);
+        if(StringUtil.isStringEmpty(result.get결과메시지())) result.set결과메시지("정상 처리되었습니다.");
+        result.set주당가치(계산된주당가치);
+        result.set계산된주당가치(계산된주당가치);
+        result.set매수적정가(매수적정가);
+        result.set목표매도가(목표매도가);
+        result.set손절매가(손절매가);
+        result.set안전마진율(String.format("%.0f%%", totalMargin * 100));
+        // 현재가: StockQuote + AftermarketTrade 비교하여 최신 가격 사용
+        String latestPrice = fetchLatestPrice(symbol);
+        if(latestPrice != null) {
+            result.set현재가격(latestPrice);
+        } else if(stockQuote != null && stockQuote.getPrice() != null) {
+            result.set현재가격(String.valueOf(stockQuote.getPrice()));
+        } else {
+            result.set현재가격(StringUtil.defaultString(companyProfile.getPrice()));
+        }
+        result.set확인시간(DateUtil.getToday("yyyy-MM-dd HH:mm:ss"));
+        result.set예측데이터(predictionResponseDto);
+        helper.setRstDetailContextData(resultDetail);
+
+        result.set상세정보(resultDetail);
+
+        //@ Redis에 결과값 저장(캐시 역할)
+        redisComponent.saveValueWithTtl(resultDataRedisKey, new Gson().toJson(result), 6, TimeUnit.HOURS);
+
+        return result;
+    }
+
+    /**
+     * V8: 그레이엄 스크리닝 (PER/PBR/복합/유동비율/연속흑자 5개 기준 통과수 → resultDetail)
+     * - 동적 안전마진이 통과수를 사용하므로 반드시 안전마진 계산 전에 호출
+     */
+    private void applyGrahamScreeningV8(String symbol, String sector, CompanySharePriceCalculator calParam,
+                                        CompanySharePriceResultDetail resultDetail, Double pbrTTM) {
         SectorCalculationParameters sectorParams = SectorParameterFactory.getParameters(sector);
         try {
             BigDecimal perVal = new BigDecimal(calParam.getPer());
@@ -488,39 +534,6 @@ public class US_StockCalFromFpmService {
         } catch (Exception e) {
             log.warn("[V8 그레이엄 스크리닝] {} - 스크리닝 실패: {}", symbol, e.getMessage());
         }
-
-        //@7. AI 예측값 조회 ---------------------------------
-        PredictionResponseDto predictionResponseDto = helper.predictWeeklyHigh(symbol);
-
-        //@8. 결과 조립 ---------------------------------
-        result.set버전(VERSION.toUpperCase());
-        result.set섹터(sector);
-        if(StringUtil.isStringEmpty(result.get결과메시지())) result.set결과메시지("정상 처리되었습니다.");
-        result.set주당가치(계산된주당가치);
-        result.set계산된주당가치(계산된주당가치);
-        result.set매수적정가(매수적정가);
-        result.set목표매도가(목표매도가);
-        result.set손절매가(손절매가);
-        result.set안전마진율(String.format("%.0f%%", totalMargin * 100));
-        // 현재가: StockQuote + AftermarketTrade 비교하여 최신 가격 사용
-        String latestPrice = fetchLatestPrice(symbol);
-        if(latestPrice != null) {
-            result.set현재가격(latestPrice);
-        } else if(stockQuote != null && stockQuote.getPrice() != null) {
-            result.set현재가격(String.valueOf(stockQuote.getPrice()));
-        } else {
-            result.set현재가격(StringUtil.defaultString(companyProfile.getPrice()));
-        }
-        result.set확인시간(DateUtil.getToday("yyyy-MM-dd HH:mm:ss"));
-        result.set예측데이터(predictionResponseDto);
-        helper.setRstDetailContextData(resultDetail);
-
-        result.set상세정보(resultDetail);
-
-        //@ Redis에 결과값 저장(캐시 역할)
-        redisComponent.saveValueWithTtl(resultDataRedisKey, new Gson().toJson(result), 6, TimeUnit.HOURS);
-
-        return result;
     }
 
     /**
