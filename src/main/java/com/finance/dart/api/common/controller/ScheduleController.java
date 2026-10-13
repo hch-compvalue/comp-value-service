@@ -1,7 +1,6 @@
 package com.finance.dart.api.common.controller;
 
 import com.finance.dart.api.common.service.schedule.RecommendedStocks;
-import com.finance.dart.api.domestic.service.schedule.CalCompanyStockPerValueTotalService;
 import com.finance.dart.common.config.EndPointConfig;
 import com.finance.dart.common.logging.TransactionLogging;
 import com.finance.dart.common.util.StringUtil;
@@ -20,23 +19,8 @@ import java.util.Map;
 @RequestMapping("schd")
 public class ScheduleController {
 
-    private final CalCompanyStockPerValueTotalService calCompanyStockPerValueTotalService;
     private final RecommendedStocks recommendedStocks;
 
-
-    /**
-     * 추천 종목 스케줄러 수동 실행(국내)
-     * @return
-     */
-    @EndPointConfig.RequireRole({RoleConstants.ROLE_SUPER_ADMIN})
-    @TransactionLogging
-    @GetMapping("/schedule")
-    public ResponseEntity<Object> scheduleTest() {
-
-        calCompanyStockPerValueTotalService.startScheduledTask();
-
-        return new ResponseEntity<>("스케줄 실행됨!!(로그 확인)", HttpStatus.OK);
-    }
 
     /**
      * 추천 종목 스케줄러 수동 실행(미국)

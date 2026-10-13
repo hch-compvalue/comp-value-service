@@ -1,7 +1,6 @@
 package com.finance.dart.api.common.controller;
 
 import com.finance.dart.api.abroad.service.US_StockCalFromFpmService;
-import com.finance.dart.api.abroad.service.US_StockCalFromSecService;
 import com.finance.dart.api.common.dto.CompanySharePriceCalculator;
 import com.finance.dart.api.common.dto.CompanySharePriceResult;
 import com.finance.dart.api.common.dto.RecommendedStocksReqDto;
@@ -20,7 +19,6 @@ import com.finance.dart.common.constant.ResponseEnum;
 import com.finance.dart.common.dto.CommonResponse;
 import com.finance.dart.common.exception.BizException;
 import com.finance.dart.common.logging.TransactionLogging;
-import jakarta.annotation.Nullable;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -43,7 +41,6 @@ import java.util.*;
 public class MainController {
 
     private final DomesticStockCalculationService domesticStockCalculationService;  // 국내주식계산 서비스
-    //private final US_StockCalFromSecService US_StockCalFromSecService;              // 미국주식계산 서비스(SEC)
     private final US_StockCalFromFpmService US_StockCalFromFmpService;              // 미국주식계산 서비스(FMP)
     private final PerShareValueCalculationService perShareValueCalculationService;  // 가치계산 서비스
     private final RecommendedCompanyService recommendedCompanyService;              // 기업추천 서비스
@@ -136,28 +133,6 @@ public class MainController {
 
         // 버전 변경시 EvaluationConst.java 상수 수정 필요
         CompanySharePriceResult responseBody = US_StockCalFromFmpService.calPerValue(symbol);   // FMP
-
-        return new ResponseEntity<>(new CommonResponse<>(responseBody), HttpStatus.OK);
-    }
-
-    /**
-     * <pre>
-     * 해외기업
-     * 한 기업의 한주당 가치 계산 다건 (최신)
-     * </pre>
-     * @param symbolList
-     * @param detail
-     * @return
-     * @throws Exception
-     */
-    @TransactionLogging
-    @GetMapping("/cal/per_value/abroad/arr")
-    public ResponseEntity<Object> calAbroadCompanyStockPerValueArr(@RequestParam("symbol") String symbolList,
-                                                                     @Nullable @RequestParam("detail") String detail)
-            throws Exception {
-
-        // 버전 변경시 EvaluationConst.java 상수 수정 필요
-        List<CompanySharePriceResult> responseBody = US_StockCalFromFmpService.calPerValueList(symbolList, detail);   // FMP
 
         return new ResponseEntity<>(new CommonResponse<>(responseBody), HttpStatus.OK);
     }

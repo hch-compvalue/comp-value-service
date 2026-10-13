@@ -1,6 +1,5 @@
 package com.finance.dart.api.common.service;
 
-import com.finance.dart.api.abroad.service.sec.SecFinStatementService;
 import com.finance.dart.api.common.constants.RequestContextConst;
 import com.finance.dart.api.common.context.RequestContext;
 import com.finance.dart.api.common.dto.CompanySharePriceCalculator;
@@ -24,8 +23,6 @@ import java.math.RoundingMode;
 public class PerShareValueCalculationService {
 
     private final RequestContext requestContext;
-
-    private final SecFinStatementService financialStatementService;     // 해외기업 재무제표 조회 서비스
 
     private final PerShareValueCalcHelper calcHelper;
 

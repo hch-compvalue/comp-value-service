@@ -14,7 +14,7 @@ import java.util.List;
 
 /**
  * 외부 API 헬스체크 서비스
- * - FMP, DART, Upbit, OpenAI, SEC 각각 경량 요청으로 UP/DOWN + 응답시간 측정
+ * - FMP, DART, Upbit, OpenAI 각각 경량 요청으로 UP/DOWN + 응답시간 측정
  * - 30초 주기로 호출 (rate limit 부담 최소화)
  * - RestTemplate 사용 (실제 API 호출과 동일한 HTTP 클라이언트)
  */
@@ -50,7 +50,6 @@ public class ExternalApiHealthService {
         results.add(checkDart());
         results.add(checkUpbit());
         results.add(checkOpenAi());
-        results.add(checkSec());
         cachedStatus = results;
     }
 
@@ -87,13 +86,6 @@ public class ExternalApiHealthService {
                 "Authorization", "Bearer " + apiKey);
     }
 
-    private ServiceStatusDto checkSec() {
-        // companyconcept: Apple의 Assets 개념 하나만 조회 (19KB, 경량)
-        return timedCheckWithHeaders("SEC",
-                "https://data.sec.gov/api/xbrl/companyconcept/CIK0000320193/us-gaap/Assets.json",
-                "User-Agent", "MyFinanceTool/1.0 (contact: dohauzi@gmail.com)");
-    }
-
     /**
      * 공통: URL에 GET 요청 보내서 응답 시간 측정 (RestTemplate)
      */
@@ -121,7 +113,7 @@ public class ExternalApiHealthService {
     }
 
     /**
-     * 커스텀 헤더가 필요한 API 헬스체크 (SEC User-Agent, OpenAI Authorization 등)
+     * 커스텀 헤더가 필요한 API 헬스체크 (OpenAI Authorization 등)
      */
     private ServiceStatusDto timedCheckWithHeaders(String name, String url,
                                                    String headerName, String headerValue) {

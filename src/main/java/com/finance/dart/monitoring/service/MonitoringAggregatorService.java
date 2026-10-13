@@ -85,7 +85,7 @@ public class MonitoringAggregatorService {
     }
 
     /**
-     * 30초 주기: 외부 API 헬스체크 (FMP, DART, Upbit, OpenAI, SEC)
+     * 30초 주기: 외부 API 헬스체크 (FMP, DART, Upbit, OpenAI)
      * rate limit 부담 최소화를 위해 긴 주기 사용
      */
     @Scheduled(fixedDelay = 30000)

@@ -92,15 +92,6 @@ public enum FmpApiList {
             "재무상태표 조회 API"
     ),
 
-    /** 주요 재무지표 조회 **/
-    KeyMetrics(
-            "Key Metrics Data API",
-            "https://financialmodelingprep.com/stable/key-metrics",
-            HttpMethod.GET,
-            "https://site.financialmodelingprep.com/developer/docs#key-metrics",
-            "주요 재무지표 조회 API"
-    ),
-
     /** 기업가치 조회 **/
     EnterpriseValues(
             "Enterprise Values Data API",

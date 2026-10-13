@@ -211,7 +211,7 @@ V8 후처리:
 
 - 분당 300건, 종목당 12회 호출 (V8 11회 + AnalystEstimates 1회)
 - `FmpRateLimiter` 중앙 rate limiter로 관리 (TRSC_DELAY sleep은 주석 처리됨)
-- 프론트 대량조회: 배치 30건, 1초 간격, **순차 호출 필수**
+- 프론트 대량조회: 종목 분석 > 일괄 평가(`InvestmentEvaluation.jsx`)만 사용 — `/main/evaluate/stocks` 배치 50건, 15초 간격, **순차 호출 필수** (기존 BulkQueryModal·`/cal/per_value/abroad/arr`는 2026-10-13 삭제)
 - 상세: memory 디렉토리의 fmp-rate-limit.md 참조
 
 ## API 응답 표준

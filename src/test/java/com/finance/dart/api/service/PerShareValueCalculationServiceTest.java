@@ -25,7 +25,7 @@ class PerShareValueCalculationServiceTest {
     @BeforeEach
     void setUp() {
         calcHelper = new PerShareValueCalcHelper(requestContext);
-        service = new PerShareValueCalculationService(requestContext, null, calcHelper);
+        service = new PerShareValueCalculationService(requestContext, calcHelper);
     }
 
 
