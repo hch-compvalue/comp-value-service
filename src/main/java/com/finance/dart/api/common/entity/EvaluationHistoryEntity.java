@@ -11,7 +11,8 @@ import java.time.LocalDateTime;
 /**
  * 종목 평가 이력 (일자별 스냅샷)
  * - 일별 자동 전수 평가 결과를 영속화 (매수후보 목록 + 수익률 추적 기반)
- * - 종목별 1행 (프로파일 무관 중복제거), 유니크(snapshot_date, symbol)
+ * - 종목별 1행 (프로파일 간 중복제거), 유니크(snapshot_date, symbol)
+ * - 어느 프로파일이 추천했는지는 source_profiles에 태그로 보존
  */
 @Data
 @NoArgsConstructor
@@ -27,6 +28,9 @@ import java.time.LocalDateTime;
                 @Index(name = "idx_evaluation_history_symbol", columnList = "symbol")
         })
 public class EvaluationHistoryEntity {
+
+    /** source_profiles 구분자 (프로파일명에 쓰지 않는 문자) */
+    public static final String PROFILE_DELIMITER = "|";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -83,6 +87,13 @@ public class EvaluationHistoryEntity {
      */
     @Column(name = "shares_outstanding", precision = 30, scale = 0)
     private BigDecimal sharesOutstanding;
+
+    /**
+     * 이 종목을 추천한 활성 프로파일명 (구분자 PROFILE_DELIMITER, 프로파일 정렬순)
+     * - 2026-10-13 추가: 이전 스냅샷은 null
+     */
+    @Column(name = "source_profiles", length = 500)
+    private String sourceProfiles;
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt = LocalDateTime.now();

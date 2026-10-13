@@ -15,9 +15,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.context.request.RequestContextHolder;
 
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Set;
+import java.util.Map;
 
 /**
  * 추천 종목 일별 자동 전수 평가기 (2-2)
@@ -42,17 +42,17 @@ public class RecommendedStocksEvaluator {
      */
     public void evaluateAll() {
         try {
-            // 1. 활성 프로파일들의 추천 종목에서 고유 심볼 수집 (프로파일 간 중복 제거)
-            Set<String> uniqueSymbols = collectUniqueSymbols();
-            if (uniqueSymbols.isEmpty()) {
+            // 1. 활성 프로파일들의 추천 종목에서 고유 심볼 수집 (프로파일 간 중복 제거, 추천한 프로파일은 태그로 보존)
+            Map<String, List<String>> symbolProfiles = collectSymbolProfiles();
+            if (symbolProfiles.isEmpty()) {
                 log.warn("[전수 평가] 평가할 추천 종목이 없습니다. 건너뜁니다.");
                 return;
             }
 
-            log.info("[전수 평가] 시작 - 고유 종목 수: {} (배치당 {}건)", uniqueSymbols.size(), EVAL_BATCH_SIZE);
+            log.info("[전수 평가] 시작 - 고유 종목 수: {} (배치당 {}건)", symbolProfiles.size(), EVAL_BATCH_SIZE);
 
             // 2. 배치 단위로 평가 (StockEvaluationService가 종목 간 FMP rate limit 대기)
-            List<String> symbolList = new ArrayList<>(uniqueSymbols);
+            List<String> symbolList = new ArrayList<>(symbolProfiles.keySet());
             List<StockEvaluationResponse> allResponses = new ArrayList<>();
 
             List<List<String>> batches = partition(symbolList, EVAL_BATCH_SIZE);
@@ -72,7 +72,7 @@ public class RecommendedStocksEvaluator {
             }
 
             // 3. 평가 이력 영속화 (ERROR 제외는 서비스에서 처리)
-            int saved = evaluationHistoryService.saveSnapshot(allResponses);
+            int saved = evaluationHistoryService.saveSnapshot(allResponses, symbolProfiles);
             log.info("[전수 평가] 완료 - 평가 {}건, 저장 {}건", allResponses.size(), saved);
 
         } catch (Exception e) {
@@ -96,23 +96,24 @@ public class RecommendedStocksEvaluator {
 
     /**
      * 활성 프로파일들의 추천 종목에서 고유 심볼 수집
+     * @return 심볼(원본 그대로, 처음 수집된 순서) → 추천한 프로파일명 목록(프로파일 정렬순, 중복 없음)
      */
-    private Set<String> collectUniqueSymbols() {
-        Set<String> symbols = new LinkedHashSet<>();
+    Map<String, List<String>> collectSymbolProfiles() {
+        Map<String, List<String>> symbolProfiles = new LinkedHashMap<>();
         List<RecommendProfileEntity> activeProfiles =
                 recommendProfileRepository.findByIsActiveOrderBySortOrder("Y");
-        if (activeProfiles == null) return symbols;
+        if (activeProfiles == null) return symbolProfiles;
 
         for (RecommendProfileEntity profile : activeProfiles) {
             List<RecommendedStockData> stocks =
                     recommendedCompanyService.getAbroadCompanyByProfile(profile.getProfileName());
             for (RecommendedStockData s : stocks) {
-                if (s.symbol() != null && !s.symbol().isEmpty()) {
-                    symbols.add(s.symbol());
-                }
+                if (s.symbol() == null || s.symbol().isEmpty()) continue;
+                List<String> profiles = symbolProfiles.computeIfAbsent(s.symbol(), k -> new ArrayList<>());
+                if (!profiles.contains(profile.getProfileName())) profiles.add(profile.getProfileName());
             }
         }
-        return symbols;
+        return symbolProfiles;
     }
 
     private <T> List<List<T>> partition(List<T> list, int size) {

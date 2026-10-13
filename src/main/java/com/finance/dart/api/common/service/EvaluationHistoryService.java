@@ -13,6 +13,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 종목 평가 이력 서비스
@@ -29,10 +30,11 @@ public class EvaluationHistoryService {
      * 평가 스냅샷 저장 (같은 날 재평가는 교체 = 멱등)
      * - ERROR 응답(평가 실패)은 제외
      * @param responses 평가 결과 리스트
+     * @param symbolProfiles 심볼 → 추천한 프로파일명 목록 (평가 응답 심볼은 요청 심볼 그대로라 그대로 조회, 없으면 태그 null)
      * @return 저장된 종목 수
      */
     @Transactional
-    public int saveSnapshot(List<StockEvaluationResponse> responses) {
+    public int saveSnapshot(List<StockEvaluationResponse> responses, Map<String, List<String>> symbolProfiles) {
         LocalDate today = LocalDate.now();
 
         // 벌크 DELETE 즉시 실행 → 이어지는 insert보다 먼저 (Hibernate insert-before-delete 순서 이슈 회피)
@@ -61,6 +63,7 @@ public class EvaluationHistoryService {
             // 발행주식수는 계산 상세에만 있음 (분할·병합 판별용, 미제공 종목은 null)
             e.setSharesOutstanding(r.getResultDetail() != null
                     ? toBigDecimal(r.getResultDetail().get발행주식수()) : null);
+            e.setSourceProfiles(joinProfiles(symbolProfiles.get(r.getSymbol())));
             e.setCreatedAt(LocalDateTime.now());
             entities.add(e);
         }
@@ -83,6 +86,11 @@ public class EvaluationHistoryService {
         }
         if (target == null) return new ArrayList<>();
         return evaluationHistoryRepository.findBySnapshotDate(target);
+    }
+
+    private String joinProfiles(List<String> profiles) {
+        if (profiles == null || profiles.isEmpty()) return null;
+        return String.join(EvaluationHistoryEntity.PROFILE_DELIMITER, profiles);
     }
 
     private BigDecimal toBigDecimal(String value) {
