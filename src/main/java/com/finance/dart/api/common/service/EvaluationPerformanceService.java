@@ -13,6 +13,7 @@ import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.function.Function;
+import java.util.regex.Pattern;
 
 /**
  * 수익률 추적 서비스 (2-4)
@@ -25,6 +26,12 @@ import java.util.function.Function;
 public class EvaluationPerformanceService {
 
     private static final BigDecimal HUNDRED = new BigDecimal("100");
+
+    /** 그룹 키가 없는 종목의 그룹명 */
+    private static final String UNCLASSIFIED_GROUP = "(미분류)";
+
+    /** source_profiles 분리용 (구분자는 정규식 특수문자라 quote) */
+    private static final Pattern PROFILE_SPLITTER = Pattern.compile(Pattern.quote(EvaluationHistoryEntity.PROFILE_DELIMITER));
 
     /**
      * 1일 기준 큰 변동 판정 임계치 (%).
@@ -60,9 +67,10 @@ public class EvaluationPerformanceService {
     }
 
     /**
-     * 기준일 대비 최신일까지의 수익률을 투자판정·가치등급별로 집계
+     * 기준일 대비 최신일까지의 수익률을 투자판정·가치등급·추천프로파일별로 집계
      * @param fromDate 기준일 (해당일에 평가된 종목들의 이후 성과)
-     * @return {"bySignal": [...], "byGrade": [...], "baseDate":..., "latestDate":..., "largeMoveThresholdPct":...}
+     * @return {"bySignal", "byGrade", "byProfile": [...], "baseDate", "latestDate", "largeMoveThresholdPct",
+     *          "baselineCount", "unmatchedCount", "unmatchedPct", "noBasePriceCount", "profileTagged"}
      */
     @Transactional(readOnly = true)
     public Map<String, Object> computePerformance(LocalDate fromDate) {
@@ -76,10 +84,14 @@ public class EvaluationPerformanceService {
         result.put("baseDate", fromDate != null ? fromDate.toString() : null);
         result.put("latestDate", latestDate != null ? latestDate.toString() : null);
 
+        // 기준일 스냅샷에 추천 프로파일 태그가 있는지 (2026-10-13 이전 스냅샷은 태그 없음)
+        result.put("profileTagged", baseline.stream().anyMatch(e -> !parseProfiles(e).isEmpty()));
+
         if (baseline.isEmpty() || latestDate == null || latestDate.equals(fromDate)) {
             // 데이터 부족(기준일=최신일이면 경과기간 0) → 빈 집계
             result.put("bySignal", List.of());
             result.put("byGrade", List.of());
+            result.put("byProfile", List.of());
             result.put("note", "수익률 산출에는 기준일 이후 경과한 스냅샷이 필요합니다.");
             return result;
         }
@@ -91,9 +103,48 @@ public class EvaluationPerformanceService {
 
         long elapsedDays = Math.max(MIN_ELAPSED_DAYS, ChronoUnit.DAYS.between(fromDate, latestDate));
         result.put("largeMoveThresholdPct", round2(largeMoveThresholdPct(elapsedDays)));
+        result.putAll(computeTrackingStats(baseline, latestBySymbol));
         result.put("bySignal", computeSummaries(baseline, latestBySymbol, EvaluationHistoryEntity::getInvestmentSignal, elapsedDays));
         result.put("byGrade", computeSummaries(baseline, latestBySymbol, EvaluationHistoryEntity::getValueGrade, elapsedDays));
+        // 한 종목을 여러 프로파일이 추천했으면 각 프로파일 그룹에 모두 집계 (태그 없는 종목은 제외)
+        result.put("byProfile", computeMultiGroupSummaries(baseline, latestBySymbol, EvaluationPerformanceService::parseProfiles, elapsedDays));
         return result;
+    }
+
+    /** 추천 프로파일 태그 분리 (없으면 빈 목록) */
+    static List<String> parseProfiles(EvaluationHistoryEntity e) {
+        String tags = e.getSourceProfiles();
+        if (tags == null || tags.isBlank()) return List.of();
+        return Arrays.stream(PROFILE_SPLITTER.split(tags)).filter(s -> !s.isBlank()).toList();
+    }
+
+    /** 기준가가 유효한지 (있고 0 초과) */
+    private static boolean hasBasePrice(EvaluationHistoryEntity e) {
+        return e.getCurrentPrice() != null && e.getCurrentPrice().compareTo(BigDecimal.ZERO) > 0;
+    }
+
+    /** 최신일 가격이 있는지 (최신일 스냅샷에 없거나 가격 결측이면 추적 불가) */
+    private static boolean hasLatestPrice(EvaluationHistoryEntity latest) {
+        return latest != null && latest.getCurrentPrice() != null;
+    }
+
+    /**
+     * 표본 편향 계측 - 기준일 종목 중 수익률을 못 낸 규모
+     * (저평가 스크리너 특성상 오른 종목이 먼저 추천에서 빠지므로 이 비율이 크면 집계가 보수적)
+     */
+    static Map<String, Object> computeTrackingStats(List<EvaluationHistoryEntity> baseline,
+                                                    Map<String, EvaluationHistoryEntity> latestBySymbol) {
+        int noBasePrice = 0, unmatched = 0;
+        for (EvaluationHistoryEntity e : baseline) {
+            if (!hasBasePrice(e)) noBasePrice++;
+            else if (!hasLatestPrice(latestBySymbol.get(e.getSymbol()))) unmatched++;
+        }
+        Map<String, Object> stats = new LinkedHashMap<>();
+        stats.put("baselineCount", baseline.size());
+        stats.put("unmatchedCount", unmatched);
+        stats.put("unmatchedPct", baseline.isEmpty() ? 0.0 : round2(unmatched * 100.0 / baseline.size()));
+        stats.put("noBasePriceCount", noBasePrice);
+        return stats;
     }
 
     /**
@@ -151,24 +202,46 @@ public class EvaluationPerformanceService {
             Map<String, EvaluationHistoryEntity> latestBySymbol,
             Function<EvaluationHistoryEntity, String> keyFn,
             long elapsedDays) {
+        return computeMultiGroupSummaries(baseline, latestBySymbol, e -> {
+            String key = keyFn.apply(e);
+            return List.of(key == null ? UNCLASSIFIED_GROUP : key);
+        }, elapsedDays);
+    }
+
+    /**
+     * 한 종목이 여러 그룹에 속할 수 있는 집계 (추천 프로파일처럼 다중 태그용)
+     * - 그룹 키가 비어 있는 종목은 어느 그룹에도 넣지 않는다
+     * - 수익률을 못 낸 종목은 그룹별 추적불가 건수(기준가 없음 / 최신일 미존재)로 남긴다
+     */
+    static List<PerformanceSummaryDto> computeMultiGroupSummaries(
+            List<EvaluationHistoryEntity> baseline,
+            Map<String, EvaluationHistoryEntity> latestBySymbol,
+            Function<EvaluationHistoryEntity, List<String>> keysFn,
+            long elapsedDays) {
 
         final double threshold = largeMoveThresholdPct(elapsedDays);
 
-        // 그룹 → 수익률 리스트 / 그룹 → 분할·병합 의심 제외 건수
+        // 그룹 → 수익률 리스트 / 그룹 → 분할·병합 의심 제외·추적불가 건수
         Map<String, List<Double>> byGroup = new LinkedHashMap<>();
         Map<String, Integer> excludedByGroup = new LinkedHashMap<>();
+        Map<String, Integer> unmatchedByGroup = new LinkedHashMap<>();
+        Map<String, Integer> noBasePriceByGroup = new LinkedHashMap<>();
         for (EvaluationHistoryEntity e : baseline) {
-            EvaluationHistoryEntity latest = latestBySymbol.get(e.getSymbol());
-            BigDecimal basePrice = e.getCurrentPrice();
-            BigDecimal latestPrice = (latest != null) ? latest.getCurrentPrice() : null;
-            if (basePrice == null || latestPrice == null
-                    || basePrice.compareTo(BigDecimal.ZERO) <= 0) {
-                continue;  // 가격 없거나 기준가 0 이하 → 제외
-            }
-            String key = keyFn.apply(e);
-            if (key == null) key = "(미분류)";
+            List<String> keys = keysFn.apply(e);
+            if (keys.isEmpty()) continue;
 
-            double returnPct = latestPrice.subtract(basePrice)
+            EvaluationHistoryEntity latest = latestBySymbol.get(e.getSymbol());
+            if (!hasBasePrice(e)) {
+                keys.forEach(key -> noBasePriceByGroup.merge(key, 1, Integer::sum));
+                continue;
+            }
+            if (!hasLatestPrice(latest)) {
+                keys.forEach(key -> unmatchedByGroup.merge(key, 1, Integer::sum));
+                continue;
+            }
+
+            BigDecimal basePrice = e.getCurrentPrice();
+            double returnPct = latest.getCurrentPrice().subtract(basePrice)
                     .divide(basePrice, 6, java.math.RoundingMode.HALF_UP)
                     .multiply(HUNDRED)
                     .doubleValue();
@@ -176,24 +249,33 @@ public class EvaluationPerformanceService {
             // 임계치를 넘은 변동만 성격을 따진다 - 분할·병합이면 평균이 왜곡되므로 빼고 건수만 남긴다
             if (Math.abs(returnPct) > threshold
                     && classifyLargeMove(e, latest) == PriceMoveVerdict.EXCLUDED) {
-                excludedByGroup.merge(key, 1, Integer::sum);
-                byGroup.computeIfAbsent(key, k -> new ArrayList<>());  // 제외만 있는 그룹도 행이 남도록
+                keys.forEach(key -> {
+                    excludedByGroup.merge(key, 1, Integer::sum);
+                    byGroup.computeIfAbsent(key, k -> new ArrayList<>());  // 제외만 있는 그룹도 행이 남도록
+                });
                 continue;
             }
-            byGroup.computeIfAbsent(key, k -> new ArrayList<>()).add(returnPct);
+            keys.forEach(key -> byGroup.computeIfAbsent(key, k -> new ArrayList<>()).add(returnPct));
         }
+        // 추적불가 종목만 있는 그룹도 행이 남도록 맨 뒤에 추가 (기존 그룹 순서는 유지)
+        unmatchedByGroup.keySet().forEach(key -> byGroup.computeIfAbsent(key, k -> new ArrayList<>()));
+        noBasePriceByGroup.keySet().forEach(key -> byGroup.computeIfAbsent(key, k -> new ArrayList<>()));
 
         List<PerformanceSummaryDto> summaries = new ArrayList<>();
         for (Map.Entry<String, List<Double>> entry : byGroup.entrySet()) {
             List<Double> returns = entry.getValue();
             int n = returns.size();
             int excluded = excludedByGroup.getOrDefault(entry.getKey(), 0);
+            int unmatched = unmatchedByGroup.getOrDefault(entry.getKey(), 0);
+            int noBasePrice = noBasePriceByGroup.getOrDefault(entry.getKey(), 0);
             if (n == 0) {
                 // 전부 제외된 그룹 - 0으로 나누지 않도록 집계값은 비우고 제외 건수만 알린다
                 summaries.add(PerformanceSummaryDto.builder()
                         .group(entry.getKey())
                         .count(0)
                         .excludedCount(excluded)
+                        .unmatchedCount(unmatched)
+                        .noBasePriceCount(noBasePrice)
                         .build());
                 continue;
             }
@@ -214,6 +296,8 @@ public class EvaluationPerformanceService {
                     .maxReturnPct(round2(max))
                     .minReturnPct(round2(min))
                     .excludedCount(excluded)
+                    .unmatchedCount(unmatched)
+                    .noBasePriceCount(noBasePrice)
                     .build());
         }
         return summaries;
