@@ -9,8 +9,6 @@ import java.util.List;
 
 public interface MemberRoleRepository extends JpaRepository<MemberRoleEntity, Long> {
 
-    List<MemberRoleEntity> findByMemberId(Long memberId);
-
     void deleteByMemberIdAndRoleId(Long memberId, Long roleId);
 
     /**

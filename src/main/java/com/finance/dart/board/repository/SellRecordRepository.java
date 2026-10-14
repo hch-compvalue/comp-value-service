@@ -17,12 +17,4 @@ public interface SellRecordRepository extends JpaRepository<SellRecordEntity, Lo
      */
     List<SellRecordEntity> findByMember_Id(Long memberId);
 
-    /**
-     * 회원ID, symbol 에 해당하는 데이터 목록 조회
-     * @param memberId
-     * @param symbol
-     * @return
-     */
-    List<SellRecordEntity> findByMember_IdAndSymbol(Long memberId, String symbol);
-
 }

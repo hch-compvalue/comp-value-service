@@ -123,21 +123,6 @@ public class RecommendProfileService {
     }
 
     /**
-     * 프로파일 단건 조회
-     */
-    public RecommendProfileDto getProfile(Long id) {
-        Optional<RecommendProfileEntity> profileOpt = profileRepository.findById(id);
-        if (profileOpt.isEmpty()) {
-            return null;
-        }
-
-        RecommendProfileEntity profileEntity = profileOpt.get();
-        Optional<RecommendProfileConfigEntity> configOpt = configRepository.findByProfile_Id(id);
-
-        return toDto(profileEntity, configOpt.orElse(null));
-    }
-
-    /**
      * 프로파일 목록 조회 (전체)
      */
     public List<RecommendProfileDto> getProfileList() {
@@ -149,40 +134,6 @@ public class RecommendProfileService {
                     return toDto(profile, configOpt.orElse(null));
                 })
                 .collect(Collectors.toList());
-    }
-
-    /**
-     * 활성화된 프로파일 목록 조회 (스케줄러에서 사용)
-     */
-    public List<RecommendProfileDto> getActiveProfileList() {
-        List<RecommendProfileEntity> profileList = profileRepository.findByIsActiveOrderBySortOrder("Y");
-
-        return profileList.stream()
-                .map(profile -> {
-                    Optional<RecommendProfileConfigEntity> configOpt = configRepository.findByProfile_Id(profile.getId());
-                    return toDto(profile, configOpt.orElse(null));
-                })
-                .collect(Collectors.toList());
-    }
-
-    /**
-     * 프로파일 활성화/비활성화 토글
-     */
-    @Transactional
-    public RecommendProfileDto toggleActive(Long id) {
-        Optional<RecommendProfileEntity> profileOpt = profileRepository.findById(id);
-        if (profileOpt.isEmpty()) {
-            return null;
-        }
-
-        RecommendProfileEntity profileEntity = profileOpt.get();
-        profileEntity.setIsActive("Y".equals(profileEntity.getIsActive()) ? "N" : "Y");
-        profileEntity.setUpdatedAt(LocalDateTime.now());
-
-        RecommendProfileEntity savedProfile = profileRepository.save(profileEntity);
-        Optional<RecommendProfileConfigEntity> configOpt = configRepository.findByProfile_Id(id);
-
-        return toDto(savedProfile, configOpt.orElse(null));
     }
 
     /**

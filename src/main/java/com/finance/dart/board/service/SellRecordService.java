@@ -97,20 +97,6 @@ public class SellRecordService {
     }
 
     /**
-     * 매도기록 단건 조회
-     * @param request
-     * @param id
-     * @return
-     */
-    public SellRecordDto getSellRecord(HttpServletRequest request, Long id) {
-
-        Optional<SellRecordEntity> dataOpt = sellRecordRepository.findById(id);
-        if (dataOpt.isEmpty()) return null;
-
-        return ConvertUtil.parseObject(dataOpt.get(), SellRecordDto.class);
-    }
-
-    /**
      * 매도기록 목록 조회
      * @param request
      * @return
@@ -124,30 +110,6 @@ public class SellRecordService {
         Long memberId = member.getId();
 
         List<SellRecordEntity> sellRecordEntityList = sellRecordRepository.findByMember_Id(memberId);
-
-        for (SellRecordEntity sellRecordEntity : sellRecordEntityList) {
-            SellRecordDto sellRecordDto = ConvertUtil.parseObject(sellRecordEntity, SellRecordDto.class);
-            sellRecordDtoList.add(sellRecordDto);
-        }
-
-        return sellRecordDtoList;
-    }
-
-    /**
-     * 티커별 매도기록 목록 조회
-     * @param request
-     * @param symbol
-     * @return
-     */
-    public List<SellRecordDto> getSellRecordListBySymbol(HttpServletRequest request, String symbol) {
-
-        List<SellRecordDto> sellRecordDtoList = new LinkedList<>();
-
-        // 로그인 회원정보
-        Member member = memberService.getLoginMember(request);
-        Long memberId = member.getId();
-
-        List<SellRecordEntity> sellRecordEntityList = sellRecordRepository.findByMember_IdAndSymbol(memberId, symbol);
 
         for (SellRecordEntity sellRecordEntity : sellRecordEntityList) {
             SellRecordDto sellRecordDto = ConvertUtil.parseObject(sellRecordEntity, SellRecordDto.class);

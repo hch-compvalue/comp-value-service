@@ -38,48 +38,6 @@ public class RoleController {
     }
 
     /**
-     * 권한 단건 조회
-     */
-    @TransactionLogging
-    @GetMapping("/{roleId}")
-    public ResponseEntity<CommonResponse<RoleEntity>> getRole(@PathVariable("roleId") Long roleId) {
-        CommonResponse<RoleEntity> response = roleService.getRole(roleId);
-        return new ResponseEntity<>(response, HttpStatus.OK);
-    }
-
-    /**
-     * 권한 등록
-     */
-    @TransactionLogging
-    @PostMapping
-    public ResponseEntity<CommonResponse<RoleEntity>> createRole(@RequestBody RoleEntity roleEntity) {
-        CommonResponse<RoleEntity> response = roleService.createRole(roleEntity);
-        return new ResponseEntity<>(response, HttpStatus.OK);
-    }
-
-    /**
-     * 권한 수정
-     */
-    @TransactionLogging
-    @PutMapping("/{roleId}")
-    public ResponseEntity<CommonResponse<RoleEntity>> updateRole(
-            @PathVariable("roleId") Long roleId,
-            @RequestBody RoleEntity roleEntity) {
-        CommonResponse<RoleEntity> response = roleService.updateRole(roleId, roleEntity);
-        return new ResponseEntity<>(response, HttpStatus.OK);
-    }
-
-    /**
-     * 권한 삭제
-     */
-    @TransactionLogging
-    @DeleteMapping("/{roleId}")
-    public ResponseEntity<CommonResponse<Void>> deleteRole(@PathVariable("roleId") Long roleId) {
-        CommonResponse<Void> response = roleService.deleteRole(roleId);
-        return new ResponseEntity<>(response, HttpStatus.OK);
-    }
-
-    /**
      * 회원에게 권한 부여
      */
     @EndPointConfig.RequireRole({RoleConstants.ROLE_SUPER_ADMIN})
@@ -109,17 +67,4 @@ public class RoleController {
         return new ResponseEntity<>(response, HttpStatus.OK);
     }
 
-    /**
-     * 회원의 권한 목록 조회
-     */
-    @EndPointConfig.RequireRole({RoleConstants.ROLE_ADMIN, RoleConstants.ROLE_SUPER_ADMIN})
-    @TransactionLogging
-    @GetMapping("/member/{memberId}")
-    public ResponseEntity<CommonResponse<List<String>>> getMemberRoles(
-            HttpServletRequest httpRequest,
-            @PathVariable("memberId") Long memberId
-    ) {
-        CommonResponse<List<String>> response = roleService.getMemberRoles(memberId);
-        return new ResponseEntity<>(response, HttpStatus.OK);
-    }
 }

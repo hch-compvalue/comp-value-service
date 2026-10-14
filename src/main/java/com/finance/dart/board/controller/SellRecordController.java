@@ -66,21 +66,6 @@ public class SellRecordController {
     }
 
     /**
-     * 매도기록 단건 조회
-     * @param request
-     * @param id
-     * @return
-     */
-    @TransactionLogging
-    @GetMapping("/{id}")
-    public ResponseEntity<CommonResponse<SellRecordDto>> getSellRecord(HttpServletRequest request, @PathVariable(name = "id") Long id) {
-
-        SellRecordDto response = sellRecordService.getSellRecord(request, id);
-
-        return new ResponseEntity<>(new CommonResponse<>(response), HttpStatus.OK);
-    }
-
-    /**
      * 매도기록 목록 조회
      * @param request
      * @return
@@ -94,18 +79,4 @@ public class SellRecordController {
         return new ResponseEntity<>(new CommonResponse<>(response), HttpStatus.OK);
     }
 
-    /**
-     * 티커별 매도기록 목록 조회
-     * @param request
-     * @param symbol
-     * @return
-     */
-    @TransactionLogging
-    @GetMapping("/symbol/{symbol}")
-    public ResponseEntity<CommonResponse<List<SellRecordDto>>> getSellRecordListBySymbol(HttpServletRequest request, @PathVariable(name = "symbol") String symbol) {
-
-        List<SellRecordDto> response = sellRecordService.getSellRecordListBySymbol(request, symbol);
-
-        return new ResponseEntity<>(new CommonResponse<>(response), HttpStatus.OK);
-    }
 }

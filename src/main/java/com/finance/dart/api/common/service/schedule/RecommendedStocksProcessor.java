@@ -37,9 +37,6 @@ import java.util.concurrent.TimeUnit;
 @Service
 public class RecommendedStocksProcessor {
 
-    /** 테스트용 최대 처리 건수 (0이면 전체 처리) */
-    public static final int MAX_PROCESS_COUNT_FOR_TEST = 0;
-
     /** API 동시 호출 건수 (1분당 300건 제한, TCP 동시연결개수 제한때문에 1초당 10건이 FMP 권장) */
     private static final int API_CALLS_PER_MINUTE = 10;
 
@@ -58,17 +55,11 @@ public class RecommendedStocksProcessor {
     private final RecommendHistoryService recommendHistoryService;
 
     /**
-     * 추천 종목 처리 실행
-     */
-    public void process() {
-        process(MAX_PROCESS_COUNT_FOR_TEST);
-    }
-
-    /**
      * 추천 종목 처리 실행 (최대 건수 지정)
      * @param maxCount 최대 처리 건수 (0이면 전체)
+     * @return 정상 종료 true, 처리 중 오류 false (활성 프로파일 없음은 정상)
      */
-    public void process(int maxCount) {
+    public boolean process(int maxCount) {
 
         try {
             // 1. 활성화된 프로파일 조회
@@ -77,7 +68,7 @@ public class RecommendedStocksProcessor {
 
             if (activeProfiles == null || activeProfiles.isEmpty()) {
                 log.warn("[추천 종목] 활성화된 프로파일이 없습니다.");
-                return;
+                return true;
             }
 
             log.info("[추천 종목] 활성화된 프로파일 수: {}개", activeProfiles.size());
@@ -100,9 +91,11 @@ public class RecommendedStocksProcessor {
             }
 
             log.info("[추천 종목] 전체 처리 완료");
+            return true;
 
         } catch (Exception e) {
             log.error("[추천 종목] 처리 중 오류 발생", e);
+            return false;
         }
     }
 

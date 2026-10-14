@@ -112,17 +112,6 @@ public class ManagementController {
     }
 
     /**
-     * 현재 버퍼에 저장된 로그 조회 (일회성)
-     */
-    @EndPointConfig.RequireRole({RoleConstants.ROLE_ADMIN, RoleConstants.ROLE_SUPER_ADMIN})
-    @TransactionLogging
-    @GetMapping("/buffer")
-    public List<String> getBufferedLogs() {
-        return logBuffer.getAllLogs();
-    }
-
-
-    /**
      * 로그파일 목록 조회
      * @return
      */

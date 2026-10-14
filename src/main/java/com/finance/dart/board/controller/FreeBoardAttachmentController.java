@@ -3,12 +3,10 @@ package com.finance.dart.board.controller;
 import com.finance.dart.board.entity.FreeBoardAttachment;
 import com.finance.dart.board.service.FileStorageService;
 import com.finance.dart.board.service.FreeBoardAttachmentService;
-import com.finance.dart.common.dto.CommonResponse;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -45,12 +43,4 @@ public class FreeBoardAttachmentController {
                 .body(resource);
     }
 
-    /**
-     * 개별 첨부파일 삭제
-     */
-    @DeleteMapping("/attachment/{attachmentId}")
-    public ResponseEntity<CommonResponse<Void>> deleteAttachment(@PathVariable("attachmentId") Long attachmentId) {
-        attachmentService.deleteAttachment(attachmentId);
-        return new ResponseEntity<>(new CommonResponse<>(), HttpStatus.OK);
-    }
 }

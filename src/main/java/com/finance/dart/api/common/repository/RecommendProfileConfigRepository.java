@@ -14,9 +14,4 @@ public interface RecommendProfileConfigRepository extends JpaRepository<Recommen
      * 프로파일 ID로 설정 조회
      */
     Optional<RecommendProfileConfigEntity> findByProfile_Id(Long profileId);
-
-    /**
-     * 프로파일 ID로 설정 삭제
-     */
-    void deleteByProfile_Id(Long profileId);
 }

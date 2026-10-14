@@ -13,7 +13,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -32,77 +31,6 @@ public class RoleService {
     public CommonResponse<List<RoleEntity>> getRoles() {
         List<RoleEntity> roles = roleRepository.findAll();
         return new CommonResponse<>(roles);
-    }
-
-    /**
-     * 권한 단건 조회
-     */
-    public CommonResponse<RoleEntity> getRole(Long roleId) {
-        Optional<RoleEntity> roleOpt = roleRepository.findById(roleId);
-        if (roleOpt.isPresent()) {
-            return new CommonResponse<>(roleOpt.get());
-        }
-        CommonResponse<RoleEntity> response = new CommonResponse<>();
-        response.setResponeInfo(ResponseEnum.NOT_FOUND);
-        return response;
-    }
-
-    /**
-     * 권한 등록
-     */
-    public CommonResponse<RoleEntity> createRole(RoleEntity roleEntity) {
-        CommonResponse<RoleEntity> response = new CommonResponse<>();
-
-        // 중복 체크
-        Optional<RoleEntity> existingRole = roleRepository.findByRoleName(roleEntity.getRoleName());
-        if (existingRole.isPresent()) {
-            response.setResponeInfo(ResponseEnum.DUPLICATE);
-            return response;
-        }
-
-        RoleEntity savedRole = roleRepository.save(roleEntity);
-        response.setResponse(savedRole);
-        return response;
-    }
-
-    /**
-     * 권한 수정
-     */
-    public CommonResponse<RoleEntity> updateRole(Long roleId, RoleEntity roleEntity) {
-        CommonResponse<RoleEntity> response = new CommonResponse<>();
-
-        Optional<RoleEntity> roleOpt = roleRepository.findById(roleId);
-        if (roleOpt.isEmpty()) {
-            response.setResponeInfo(ResponseEnum.NOT_FOUND);
-            return response;
-        }
-
-        RoleEntity existingRole = roleOpt.get();
-        existingRole.setRoleName(roleEntity.getRoleName());
-        existingRole.setDescription(roleEntity.getDescription());
-        existingRole.setUpdatedAt(LocalDateTime.now());
-
-        RoleEntity savedRole = roleRepository.save(existingRole);
-        response.setResponse(savedRole);
-        return response;
-    }
-
-    /**
-     * 권한 삭제
-     */
-    @Transactional
-    public CommonResponse<Void> deleteRole(Long roleId) {
-        CommonResponse<Void> response = new CommonResponse<>();
-
-        Optional<RoleEntity> roleOpt = roleRepository.findById(roleId);
-        if (roleOpt.isEmpty()) {
-            response.setResponeInfo(ResponseEnum.NOT_FOUND);
-            return response;
-        }
-
-        roleRepository.deleteById(roleId);
-        response.setResponeInfo(ResponseEnum.OK);
-        return response;
     }
 
     /**

@@ -25,9 +25,4 @@ public interface RecommendProfileRepository extends JpaRepository<RecommendProfi
      * 전체 프로파일 목록 조회 (정렬순서)
      */
     List<RecommendProfileEntity> findAllByOrderBySortOrder();
-
-    /**
-     * 활성화된 프로파일 존재 여부
-     */
-    boolean existsByIsActive(String isActive);
 }

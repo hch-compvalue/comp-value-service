@@ -63,36 +63,6 @@ public class MemberController {
     }
 
     /**
-     * 현재 로그인 계정 관리자 권한 여부 확인
-     * @param request
-     * @return
-     */
-    @EndPointConfig.RequireRole({RoleConstants.ROLE_ADMIN, RoleConstants.ROLE_SUPER_ADMIN})
-    @TransactionLogging
-    @GetMapping("/admin/users")
-    public ResponseEntity<?> getUsers01(HttpServletRequest request) {
-
-        CommonResponse response = new CommonResponse();
-
-        return new ResponseEntity<>(response, HttpStatus.OK);
-    }
-
-    /**
-     * 현재 로그인 계정 슈퍼 관리자 권한 여부 확인
-     * @param request
-     * @return
-     */
-    @EndPointConfig.RequireRole({RoleConstants.ROLE_SUPER_ADMIN})
-    @TransactionLogging
-    @GetMapping("/super_admin/users")
-    public ResponseEntity<?> getUsers02(HttpServletRequest request) {
-
-        CommonResponse response = new CommonResponse();
-
-        return new ResponseEntity<>(response, HttpStatus.OK);
-    }
-
-    /**
      * 로그아웃
      * @param request
      * @return

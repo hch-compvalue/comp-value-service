@@ -32,6 +32,9 @@ public class RecommendedStocksEvaluator {
     /** 평가 배치 크기 (StockEvaluationService.MAX_EVALUATION_SYMBOLS 이하) */
     private static final int EVAL_BATCH_SIZE = 50;
 
+    /** evaluateAll() 실패 반환값 (저장 건수 대신) */
+    public static final int EVALUATION_FAILED = -1;
+
     private final RecommendProfileRepository recommendProfileRepository;
     private final RecommendedCompanyService recommendedCompanyService;
     private final StockEvaluationService stockEvaluationService;
@@ -39,14 +42,15 @@ public class RecommendedStocksEvaluator {
 
     /**
      * 추천된 전 종목 전수 평가 실행
+     * @return 평가 이력 저장 건수 (평가할 종목 없으면 0, 오류면 EVALUATION_FAILED)
      */
-    public void evaluateAll() {
+    public int evaluateAll() {
         try {
             // 1. 활성 프로파일들의 추천 종목에서 고유 심볼 수집 (프로파일 간 중복 제거, 추천한 프로파일은 태그로 보존)
             Map<String, List<String>> symbolProfiles = collectSymbolProfiles();
             if (symbolProfiles.isEmpty()) {
                 log.warn("[전수 평가] 평가할 추천 종목이 없습니다. 건너뜁니다.");
-                return;
+                return 0;
             }
 
             log.info("[전수 평가] 시작 - 고유 종목 수: {} (배치당 {}건)", symbolProfiles.size(), EVAL_BATCH_SIZE);
@@ -74,9 +78,11 @@ public class RecommendedStocksEvaluator {
             // 3. 평가 이력 영속화 (ERROR 제외는 서비스에서 처리)
             int saved = evaluationHistoryService.saveSnapshot(allResponses, symbolProfiles);
             log.info("[전수 평가] 완료 - 평가 {}건, 저장 {}건", allResponses.size(), saved);
+            return saved;
 
         } catch (Exception e) {
             log.error("[전수 평가] 처리 중 오류 발생", e);
+            return EVALUATION_FAILED;
         }
     }
 

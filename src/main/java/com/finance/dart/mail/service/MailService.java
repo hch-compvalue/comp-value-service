@@ -4,7 +4,6 @@ import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
@@ -17,31 +16,6 @@ public class MailService {
 
     @Value("${spring.mail.username}")
     private String sender;
-
-    /**
-     * 메일 전송(평문)
-     * @param to
-     * @param subject
-     * @param text
-     * @return
-     */
-    public boolean sendEmail(String to, String subject, String text) {
-
-        try {
-            SimpleMailMessage message = new SimpleMailMessage();
-            message.setFrom(sender);
-            message.setTo(to);
-            message.setSubject(subject);
-            message.setText(text);
-
-            mailSender.send(message);
-
-        } catch (Exception e) {
-            return false;
-        }
-
-        return true;
-    }
 
     /**
      * 메일 전송(HTML)

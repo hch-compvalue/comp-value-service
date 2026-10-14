@@ -1,13 +1,14 @@
 package com.finance.dart.stockpredictor.controller;
 
-
 import com.finance.dart.stockpredictor.dto.LogContentDto;
 import com.finance.dart.stockpredictor.dto.LogFileInfoDto;
 import com.finance.dart.stockpredictor.dto.LogFileListDto;
 import com.finance.dart.stockpredictor.dto.PredictionResponseDto;
 import com.finance.dart.stockpredictor.service.MlService;
+import com.finance.dart.common.config.EndPointConfig;
 import com.finance.dart.common.dto.CommonResponse;
 import com.finance.dart.common.logging.TransactionLogging;
+import com.finance.dart.member.enums.RoleConstants;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -30,35 +31,6 @@ import org.springframework.web.bind.annotation.RestController;
 public class StockPredictorController {
 
     private final MlService mlService;
-
-    /**
-     * AI 예측 - 1주일 내 최고가
-     * @param symbol 티커 심볼
-     * @return 예측 결과
-     */
-    @TransactionLogging
-    @GetMapping("/predict")
-    public ResponseEntity<CommonResponse<PredictionResponseDto>> predict(@RequestParam(name = "symbol") String symbol) {
-
-        if(log.isDebugEnabled()) log.debug("/ml/predict 거래 요청 symbol = {}", symbol);
-
-        try {
-            PredictionResponseDto prediction = mlService.getPrediction(symbol, true);
-
-            CommonResponse<PredictionResponseDto> response = new CommonResponse<>(prediction);
-            response.setMessage("AI 예측 조회 성공");
-
-            return new ResponseEntity<>(response, HttpStatus.OK);
-
-        } catch (Exception e) {
-            log.error("AI 예측 조회 실패 - symbol: {}, error: {}", symbol, e.getMessage(), e);
-
-            CommonResponse<PredictionResponseDto> errorResponse = new CommonResponse<>();
-            errorResponse.setMessage("AI 예측 조회 실패: " + e.getMessage());
-
-            return new ResponseEntity<>(errorResponse, HttpStatus.INTERNAL_SERVER_ERROR);
-        }
-    }
 
     /**
      * <pre>
@@ -96,6 +68,7 @@ public class StockPredictorController {
      * 수동 재학습 시작
      * @return 재학습 시작 결과
      */
+    @EndPointConfig.RequireRole({RoleConstants.ROLE_SUPER_ADMIN})
     @TransactionLogging
     @PostMapping("/retrain")
     public ResponseEntity<CommonResponse<String>> startRetrain() {
@@ -124,6 +97,7 @@ public class StockPredictorController {
      * 재학습 상태 조회
      * @return 재학습 진행 상황
      */
+    @EndPointConfig.RequireRole({RoleConstants.ROLE_SUPER_ADMIN})
     @TransactionLogging
     @GetMapping("/retrain/status")
     public ResponseEntity<CommonResponse<String>> getRetrainStatus() {
@@ -152,6 +126,7 @@ public class StockPredictorController {
      * 재학습 대상 종목 조회 (섹터별 시총 상위)
      * @return 섹터별 종목 목록
      */
+    @EndPointConfig.RequireRole({RoleConstants.ROLE_SUPER_ADMIN})
     @TransactionLogging
     @GetMapping("/retrain/targets")
     public ResponseEntity<CommonResponse<String>> getRetrainTargets() {
@@ -180,6 +155,7 @@ public class StockPredictorController {
      * 로그 파일 목록 조회
      * @return 로그 파일 목록
      */
+    @EndPointConfig.RequireRole({RoleConstants.ROLE_ADMIN, RoleConstants.ROLE_SUPER_ADMIN})
     @TransactionLogging
     @GetMapping("/logs")
     public ResponseEntity<CommonResponse<LogFileListDto>> getLogFileList() {
@@ -208,6 +184,7 @@ public class StockPredictorController {
      * 최신 로그 파일 정보 조회
      * @return 최신 로그 파일 정보
      */
+    @EndPointConfig.RequireRole({RoleConstants.ROLE_ADMIN, RoleConstants.ROLE_SUPER_ADMIN})
     @TransactionLogging
     @GetMapping("/logs/latest")
     public ResponseEntity<CommonResponse<LogFileInfoDto>> getLatestLogFileInfo() {
@@ -237,6 +214,7 @@ public class StockPredictorController {
      * @param filename 로그 파일명
      * @return 로그 내용
      */
+    @EndPointConfig.RequireRole({RoleConstants.ROLE_ADMIN, RoleConstants.ROLE_SUPER_ADMIN})
     @TransactionLogging
     @GetMapping("/logs/{filename}")
     public ResponseEntity<CommonResponse<LogContentDto>> getLogContent(@PathVariable(name = "filename") String filename) {
@@ -266,6 +244,7 @@ public class StockPredictorController {
      * @param lastLine 마지막으로 읽은 줄 번호 (0이면 초기 로드)
      * @return 최신 로그 내용
      */
+    @EndPointConfig.RequireRole({RoleConstants.ROLE_ADMIN, RoleConstants.ROLE_SUPER_ADMIN})
     @TransactionLogging
     @GetMapping("/logs/stream/latest")
     public ResponseEntity<CommonResponse<LogContentDto>> getLatestLogStream(

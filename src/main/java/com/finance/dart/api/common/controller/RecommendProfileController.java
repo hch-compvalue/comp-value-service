@@ -65,18 +65,6 @@ public class RecommendProfileController {
     }
 
     /**
-     * 프로파일 단건 조회
-     */
-    @TransactionLogging
-    @GetMapping("/{id}")
-    public ResponseEntity<CommonResponse<RecommendProfileDto>> getProfile(@PathVariable(name = "id") Long id) {
-
-        RecommendProfileDto result = recommendProfileService.getProfile(id);
-
-        return new ResponseEntity<>(new CommonResponse<>(result), HttpStatus.OK);
-    }
-
-    /**
      * 프로파일 목록 조회 (사용중인 프로파일)
      */
     @TransactionLogging
@@ -88,28 +76,4 @@ public class RecommendProfileController {
         return new ResponseEntity<>(new CommonResponse<>(result), HttpStatus.OK);
     }
 
-    /**
-     * 활성화된 프로파일 목록 조회 (스케줄러용)
-     */
-    @TransactionLogging
-    @GetMapping("/active")
-    public ResponseEntity<CommonResponse<List<RecommendProfileDto>>> getActiveProfileList() {
-
-        List<RecommendProfileDto> result = recommendProfileService.getActiveProfileList();
-
-        return new ResponseEntity<>(new CommonResponse<>(result), HttpStatus.OK);
-    }
-
-    /**
-     * 프로파일 활성화/비활성화 토글
-     */
-    @EndPointConfig.RequireRole({RoleConstants.ROLE_SUPER_ADMIN})
-    @TransactionLogging
-    @PostMapping("/toggle/{id}")
-    public ResponseEntity<CommonResponse<RecommendProfileDto>> toggleActive(@PathVariable(name = "id") Long id) {
-
-        RecommendProfileDto result = recommendProfileService.toggleActive(id);
-
-        return new ResponseEntity<>(new CommonResponse<>(result), HttpStatus.OK);
-    }
 }

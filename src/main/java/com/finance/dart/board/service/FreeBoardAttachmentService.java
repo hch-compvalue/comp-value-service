@@ -158,13 +158,4 @@ public class FreeBoardAttachmentService {
                 .orElseThrow(() -> new BizException("첨부파일을 찾을 수 없습니다."));
     }
 
-    /**
-     * 개별 첨부파일 삭제 (권한 체크 포함)
-     */
-    @Transactional
-    public void deleteAttachment(Long attachmentId) {
-        FreeBoardAttachment attachment = getAttachmentEntity(attachmentId);
-        fileStorageService.deleteFile(attachment.getStoredFilename());
-        attachmentRepository.delete(attachment);
-    }
 }

@@ -9,5 +9,4 @@ public interface FreeBoardAttachmentRepository extends JpaRepository<FreeBoardAt
 
     List<FreeBoardAttachment> findByFreeBoardId(Long freeBoardId);
 
-    void deleteByFreeBoardId(Long freeBoardId);
 }
