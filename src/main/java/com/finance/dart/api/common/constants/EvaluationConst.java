@@ -169,6 +169,9 @@ public class EvaluationConst {
     /** Step5 매수적정가 미달 시 적정가 상승여력 2점 하한 % (V8 0) */
     public static final double STEP5_FAIR_GAP_LOW_PCT = -27.0;
 
+    /** 투자 순위 점수 단기 눌림 요소: 최근 N거래일 수익률 (백테스트 ret_1w 와 동일) */
+    public static final int RETURN_1W_TRADING_DAYS = 5;
+
     // ========== 금융(PBR 경로) 괴리 기준 분리 (2026-10-14) ==========
     // PBR 경로 적정가는 V9 에서 바뀌지 않아 괴리 분포가 비금융보다 ~25%p 높음(중앙값 -24% vs -50%) → 위 공통 기준을 쓰면
     // 금융만 점수 이득(10-14 매수후보 34/103 금융). 각 구간 종목 비율이 비금융과 같도록 금융 괴리 분포로 분위 매칭

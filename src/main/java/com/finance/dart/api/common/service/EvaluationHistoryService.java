@@ -31,10 +31,12 @@ public class EvaluationHistoryService {
      * - ERROR 응답(평가 실패)은 제외
      * @param responses 평가 결과 리스트
      * @param symbolProfiles 심볼 → 추천한 프로파일명 목록 (평가 응답 심볼은 요청 심볼 그대로라 그대로 조회, 없으면 태그 null)
+     * @param symbolRoe 심볼 → ROE TTM (투자 순위 점수용, 없으면 그 종목 순위 점수 null)
      * @return 저장된 종목 수
      */
     @Transactional
-    public int saveSnapshot(List<StockEvaluationResponse> responses, Map<String, List<String>> symbolProfiles) {
+    public int saveSnapshot(List<StockEvaluationResponse> responses, Map<String, List<String>> symbolProfiles,
+                            Map<String, Double> symbolRoe) {
         LocalDate today = LocalDate.now();
 
         // 벌크 DELETE 즉시 실행 → 이어지는 insert보다 먼저 (Hibernate insert-before-delete 순서 이슈 회피)
@@ -64,9 +66,14 @@ public class EvaluationHistoryService {
             e.setSharesOutstanding(r.getResultDetail() != null
                     ? toBigDecimal(r.getResultDetail().get발행주식수()) : null);
             e.setSourceProfiles(joinProfiles(symbolProfiles.get(r.getSymbol())));
+            e.setRoe(symbolRoe.get(r.getSymbol()));
+            e.setReturn1wPct(r.getReturn1wPct());
             e.setCreatedAt(LocalDateTime.now());
             entities.add(e);
         }
+
+        // 그날 후보 전체 기준 백분위 → 투자 순위 점수 (평가 실패 종목은 이미 제외됨)
+        InvestmentRankScorer.assign(entities);
 
         evaluationHistoryRepository.saveAll(entities);
         log.info("[평가 이력] DB 저장 완료 - 일자: {}, 종목 수: {} (평가 실패 제외)", today, entities.size());

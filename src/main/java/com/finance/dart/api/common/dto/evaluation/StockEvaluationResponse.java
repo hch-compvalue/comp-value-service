@@ -196,6 +196,9 @@ public class StockEvaluationResponse {
      */
     private String high52wDropPercent;
 
+    /** 최근 5거래일 수익률 (%) — 투자 순위 점수의 단기 눌림 요소. 가격 이력 부족 시 null */
+    private Double return1wPct;
+
     /**
      * Forward PER (애널리스트 컨센서스 기반)
      */

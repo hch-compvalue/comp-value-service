@@ -73,6 +73,13 @@ public class EvaluationPerformanceService {
     /** 휴장일을 넘어 직전 종가를 찾을 수 있도록 조회 시작일을 앞당기는 여유 (일) */
     private static final long BENCHMARK_LOOKBACK_PAD_DAYS = 10L;
 
+    /** 투자 순위 그룹 경계 (기준일 후보의 순위 점수 상·하위 비율) */
+    static final double RANK_GROUP_TAIL = 0.2;
+    static final String RANK_TOP = "상위 20%";
+    static final String RANK_MIDDLE = "중간 60%";
+    static final String RANK_BOTTOM = "하위 20%";
+    private static final List<String> RANK_GROUP_ORDER = List.of(RANK_TOP, RANK_MIDDLE, RANK_BOTTOM);
+
     /** 벤치마크 조회 시도 횟수 (일시적 네트워크 오류 대비) */
     private static final int BENCHMARK_FETCH_ATTEMPTS = 2;
 
@@ -132,7 +139,33 @@ public class EvaluationPerformanceService {
         result.put("byGrade", computeSummaries(baseline, latestBySymbol, EvaluationHistoryEntity::getValueGrade, elapsedDays, benchmarkPct));
         // 한 종목을 여러 프로파일이 추천했으면 각 프로파일 그룹에 모두 집계 (태그 없는 종목은 제외)
         result.put("byProfile", computeMultiGroupSummaries(baseline, latestBySymbol, EvaluationPerformanceService::parseProfiles, elapsedDays, benchmarkPct));
+        // 투자 순위 상·중·하 (순위 점수 없는 10-14 이전 스냅샷이면 빈 목록) — 순위가 실제로 좋은 종목을 위로 올리는지 실전 검증
+        List<PerformanceSummaryDto> byRank = new ArrayList<>(computeMultiGroupSummaries(
+                baseline, latestBySymbol, rankGroupKeys(baseline), elapsedDays, benchmarkPct));
+        byRank.sort(Comparator.comparingInt(sm -> RANK_GROUP_ORDER.indexOf(sm.getGroup())));
+        result.put("byRank", byRank);
         return result;
+    }
+
+    /**
+     * 기준일 후보의 순위 점수 분포로 상위 20% / 중간 60% / 하위 20% 그룹 키 함수 생성
+     * - 순위 점수 없는 종목은 어느 그룹에도 넣지 않음. 경계값 동점은 상위·하위 쪽에 포함
+     */
+    static Function<EvaluationHistoryEntity, List<String>> rankGroupKeys(List<EvaluationHistoryEntity> baseline) {
+        List<Double> scores = baseline.stream().map(EvaluationHistoryEntity::getRankScore)
+                .filter(Objects::nonNull).sorted().toList();
+        if (scores.isEmpty()) return e -> List.of();
+        int n = scores.size();
+        int tail = Math.max(1, (int) Math.floor(n * RANK_GROUP_TAIL));
+        double bottomCut = scores.get(tail - 1);
+        double topCut = scores.get(n - tail);
+        return e -> {
+            Double sc = e.getRankScore();
+            if (sc == null) return List.of();
+            if (sc >= topCut) return List.of(RANK_TOP);
+            if (sc <= bottomCut) return List.of(RANK_BOTTOM);
+            return List.of(RANK_MIDDLE);
+        };
     }
 
     /**

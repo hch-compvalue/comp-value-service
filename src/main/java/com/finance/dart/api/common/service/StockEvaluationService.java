@@ -192,6 +192,7 @@ public class StockEvaluationService {
 
         // 4-4. [개선3] 52주 고점 대비 하락률 감점
         String high52wDropPercent = calculate52WeekHighDrop(priceHistory, stockQuote);
+        Double return1wPct = calculateReturnPct(priceHistory, EvaluationConst.RETURN_1W_TRADING_DAYS);
         if (high52wDropPercent != null) {
             try {
                 double dropPct = Double.parseDouble(high52wDropPercent.replace("%", ""));
@@ -308,6 +309,7 @@ public class StockEvaluationService {
                 .momentumGatePass(momentumGatePass)
                 .entryTiming(entryTiming)
                 .high52wDropPercent(high52wDropPercent)
+                .return1wPct(return1wPct)
                 .forwardPer(forwardPer)
                 .forwardPerWarning(forwardPerWarning)
                 .valueScore(valueScore)
@@ -1211,6 +1213,22 @@ public class StockEvaluationService {
      * @param stockQuote 현재 시세
      * @return 하락률 문자열 (예: "-25.30%"), 계산 불가 시 null
      */
+    /**
+     * 최근 N거래일 수익률 (%) — 가격 이력의 최신 종가 / N거래일 전 종가 − 1
+     * @param priceHistory 가격 이력 (정렬 무관, 날짜 내림차순으로 다시 정렬해 사용)
+     * @return 소수 2자리 %, 이력이 N+1일 미만이거나 가격이 없으면 null
+     */
+    static Double calculateReturnPct(List<StockPriceVolumeResDto> priceHistory, int tradingDays) {
+        if (priceHistory == null) return null;
+        List<StockPriceVolumeResDto> sorted = priceHistory.stream()
+                .filter(p -> p.getDate() != null && p.getClose() != null && p.getClose() > 0)
+                .sorted(java.util.Comparator.comparing(StockPriceVolumeResDto::getDate).reversed())
+                .toList();
+        if (sorted.size() <= tradingDays) return null;
+        double ret = (sorted.get(0).getClose() / sorted.get(tradingDays).getClose() - 1) * 100;
+        return Math.round(ret * 100.0) / 100.0;
+    }
+
     private String calculate52WeekHighDrop(List<StockPriceVolumeResDto> priceHistory,
                                             StockQuoteResDto stockQuote) {
         if (priceHistory == null || priceHistory.isEmpty() || stockQuote == null

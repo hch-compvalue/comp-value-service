@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.context.request.RequestContextHolder;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -47,7 +48,8 @@ public class RecommendedStocksEvaluator {
     public int evaluateAll() {
         try {
             // 1. 활성 프로파일들의 추천 종목에서 고유 심볼 수집 (프로파일 간 중복 제거, 추천한 프로파일은 태그로 보존)
-            Map<String, List<String>> symbolProfiles = collectSymbolProfiles();
+            Candidates candidates = collectCandidates();
+            Map<String, List<String>> symbolProfiles = candidates.profiles();
             if (symbolProfiles.isEmpty()) {
                 log.warn("[전수 평가] 평가할 추천 종목이 없습니다. 건너뜁니다.");
                 return 0;
@@ -76,7 +78,7 @@ public class RecommendedStocksEvaluator {
             }
 
             // 3. 평가 이력 영속화 (ERROR 제외는 서비스에서 처리)
-            int saved = evaluationHistoryService.saveSnapshot(allResponses, symbolProfiles);
+            int saved = evaluationHistoryService.saveSnapshot(allResponses, symbolProfiles, candidates.roe());
             log.info("[전수 평가] 완료 - 평가 {}건, 저장 {}건", allResponses.size(), saved);
             return saved;
 
@@ -101,14 +103,21 @@ public class RecommendedStocksEvaluator {
     }
 
     /**
-     * 활성 프로파일들의 추천 종목에서 고유 심볼 수집
-     * @return 심볼(원본 그대로, 처음 수집된 순서) → 추천한 프로파일명 목록(프로파일 정렬순, 중복 없음)
+     * 평가 대상 후보
+     * @param profiles 심볼(원본 그대로, 처음 수집된 순서) → 추천한 프로파일명 목록(프로파일 정렬순, 중복 없음)
+     * @param roe 심볼 → 추천 수집 시 받은 ROE TTM (투자 순위 점수용, 없으면 키 없음)
      */
-    Map<String, List<String>> collectSymbolProfiles() {
+    record Candidates(Map<String, List<String>> profiles, Map<String, Double> roe) {}
+
+    /**
+     * 활성 프로파일들의 추천 종목에서 고유 심볼과 ROE 수집 (추가 FMP 호출 없음 — Redis 추천 결과 재사용)
+     */
+    Candidates collectCandidates() {
         Map<String, List<String>> symbolProfiles = new LinkedHashMap<>();
+        Map<String, Double> symbolRoe = new HashMap<>();
         List<RecommendProfileEntity> activeProfiles =
                 recommendProfileRepository.findByIsActiveOrderBySortOrder("Y");
-        if (activeProfiles == null) return symbolProfiles;
+        if (activeProfiles == null) return new Candidates(symbolProfiles, symbolRoe);
 
         for (RecommendProfileEntity profile : activeProfiles) {
             List<RecommendedStockData> stocks =
@@ -117,9 +126,10 @@ public class RecommendedStocksEvaluator {
                 if (s.symbol() == null || s.symbol().isEmpty()) continue;
                 List<String> profiles = symbolProfiles.computeIfAbsent(s.symbol(), k -> new ArrayList<>());
                 if (!profiles.contains(profile.getProfileName())) profiles.add(profile.getProfileName());
+                if (s.returnOnEquityTTM() != null) symbolRoe.putIfAbsent(s.symbol(), s.returnOnEquityTTM());
             }
         }
-        return symbolProfiles;
+        return new Candidates(symbolProfiles, symbolRoe);
     }
 
     private <T> List<List<T>> partition(List<T> list, int size) {

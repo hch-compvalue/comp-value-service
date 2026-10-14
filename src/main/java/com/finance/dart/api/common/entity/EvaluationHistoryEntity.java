@@ -95,6 +95,27 @@ public class EvaluationHistoryEntity {
     @Column(name = "source_profiles", length = 500)
     private String sourceProfiles;
 
+    // ── 투자 순위 (2026-10-14): 그날 후보 안 백분위 평균 = (수익성 + 가치 + 단기 눌림) / 3 ──
+    // 백테스트(test/backtest-v8-2026-10 스윙 분석)로 2~4주 순위 예측력 확인된 요소만 사용. 10-14 이전 행은 null
+
+    @Column(name = "roe")
+    private Double roe;                     // ROE TTM (추천 수집 시 FMP ratios-ttm 값, 비율)
+
+    @Column(name = "return_1w_pct")
+    private Double return1wPct;             // 최근 5거래일 수익률 (%)
+
+    @Column(name = "roe_pct")
+    private Double roePct;                  // 후보 안 ROE 백분위 (0~100, 높을수록 수익성 상위)
+
+    @Column(name = "value_pct")
+    private Double valuePct;                // 후보 안 가치점수 백분위 (0~100)
+
+    @Column(name = "pullback_pct")
+    private Double pullbackPct;             // 후보 안 단기 눌림 백분위 (0~100, 1주 하락이 클수록 높음)
+
+    @Column(name = "rank_score")
+    private Double rankScore;               // 투자 순위 점수 (0~100, 세 백분위 평균. 하나라도 없으면 null)
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 }
