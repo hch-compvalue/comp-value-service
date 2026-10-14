@@ -169,4 +169,29 @@ public class EvaluationConst {
     /** Step5 매수적정가 미달 시 적정가 상승여력 2점 하한 % (V8 0) */
     public static final double STEP5_FAIR_GAP_LOW_PCT = -27.0;
 
+    // ========== 금융(PBR 경로) 괴리 기준 분리 (2026-10-14) ==========
+    // PBR 경로 적정가는 V9 에서 바뀌지 않아 괴리 분포가 비금융보다 ~25%p 높음(중앙값 -24% vs -50%) → 위 공통 기준을 쓰면
+    // 금융만 점수 이득(10-14 매수후보 34/103 금융). 각 구간 종목 비율이 비금융과 같도록 금융 괴리 분포로 분위 매칭
+    // (test/backtest-v8-2026-10 V9 재실행, 비금융 8,714건 / 금융 2,416건). 괄호 = 대응하는 공통 기준
+    /** 금융 Step3 가격괴리 6점 하한 % (-8) */
+    public static final double FIN_STEP3_GAP_UNDERVALUED_PCT = 11.0;
+    /** 금융 Step3 가격괴리 5점 하한 % (-14) */
+    public static final double FIN_STEP3_GAP_SLIGHT_UNDERVALUED_PCT = 6.0;
+    /** 금융 Step3 가격괴리 4점 하한 % (-21) */
+    public static final double FIN_STEP3_GAP_MILD_UNDERVALUED_PCT = 0.0;
+    /** 금융 Step3 가격괴리 2점 하한 % (-27) */
+    public static final double FIN_STEP3_GAP_FAIR_PCT = -5.0;
+    /** 금융 Step3 가격괴리 1점 하한 % (-36) */
+    public static final double FIN_STEP3_GAP_SLIGHT_OVERVALUED_PCT = -11.0;
+    /** 금융 Step5 그레이엄 고평가 감점 50% 시작 % (-36) */
+    public static final double FIN_STEP5_OVERVALUED_PENALTY_HALF_PCT = -11.0;
+    /** 금융 Step5 그레이엄 고평가 감점 75% 시작 % (-42) */
+    public static final double FIN_STEP5_OVERVALUED_PENALTY_MOST_PCT = -16.0;
+    /** 금융 Step5 그레이엄 고평가 감점 100% 시작 % (-50) */
+    public static final double FIN_STEP5_OVERVALUED_PENALTY_FULL_PCT = -24.0;
+    /** 금융 Step5 적정가 상승여력 4점 하한 % (-21) */
+    public static final double FIN_STEP5_FAIR_GAP_HIGH_PCT = 0.0;
+    /** 금융 Step5 적정가 상승여력 2점 하한 % (-27) */
+    public static final double FIN_STEP5_FAIR_GAP_LOW_PCT = -5.0;
+
 }
