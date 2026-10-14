@@ -1,5 +1,8 @@
 package com.finance.dart.api.common.service;
 
+import com.finance.dart.api.abroad.dto.fmp.chart.StockPriceVolumeReqDto;
+import com.finance.dart.api.abroad.dto.fmp.chart.StockPriceVolumeResDto;
+import com.finance.dart.api.abroad.service.fmp.StockPriceVolumeService;
 import com.finance.dart.api.common.dto.evaluation.PerformanceSummaryDto;
 import com.finance.dart.api.common.entity.EvaluationHistoryEntity;
 import com.finance.dart.api.common.repository.EvaluationHistoryRepository;
@@ -7,6 +10,7 @@ import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestClientException;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -17,8 +21,9 @@ import java.util.regex.Pattern;
 
 /**
  * 수익률 추적 서비스 (2-4)
- * - 일별 평가가 매일 저장한 current_price만으로 수익률 계산 (추가 FMP 호출 없음)
+ * - 일별 평가가 매일 저장한 current_price로 수익률 계산
  * - "특정 기준일의 투자판정/가치등급별로 이후 실제 수익률이 어땠는가" 집계 → 신뢰도 데이터 검증
+ * - 같은 기간 SPY 수익률(FMP 1회 조회)과 비교 — 판정이 지수 매수보다 나은지 확인 (조회 실패 시 비교값만 비움)
  */
 @Slf4j
 @Service
@@ -56,7 +61,23 @@ public class EvaluationPerformanceService {
      */
     private static final double FAIR_VALUE_STABLE_TOLERANCE = 0.01;
 
+    /** 비교 기준 지수 ETF */
+    static final String BENCHMARK_SYMBOL = "SPY";
+
+    /**
+     * 스냅샷일 → 비교할 SPY 종가일 오프셋.
+     * 평가는 한국시간 오전에 돌아 직전 미국 거래일 종가를 현재가로 저장하므로, 스냅샷일 전날 이전의 마지막 종가를 쓴다.
+     */
+    private static final long BENCHMARK_CLOSE_LAG_DAYS = 1L;
+
+    /** 휴장일을 넘어 직전 종가를 찾을 수 있도록 조회 시작일을 앞당기는 여유 (일) */
+    private static final long BENCHMARK_LOOKBACK_PAD_DAYS = 10L;
+
+    /** 벤치마크 조회 시도 횟수 (일시적 네트워크 오류 대비) */
+    private static final int BENCHMARK_FETCH_ATTEMPTS = 2;
+
     private final EvaluationHistoryRepository evaluationHistoryRepository;
+    private final StockPriceVolumeService stockPriceVolumeService;
 
     /** 큰 변동의 성격 판정 결과 */
     enum PriceMoveVerdict {
@@ -102,13 +123,48 @@ public class EvaluationPerformanceService {
         }
 
         long elapsedDays = Math.max(MIN_ELAPSED_DAYS, ChronoUnit.DAYS.between(fromDate, latestDate));
+        Double benchmarkPct = fetchBenchmarkReturnPct(fromDate, latestDate);
+        result.put("benchmarkSymbol", BENCHMARK_SYMBOL);
+        result.put("benchmarkReturnPct", benchmarkPct);
         result.put("largeMoveThresholdPct", round2(largeMoveThresholdPct(elapsedDays)));
         result.putAll(computeTrackingStats(baseline, latestBySymbol));
-        result.put("bySignal", computeSummaries(baseline, latestBySymbol, EvaluationHistoryEntity::getInvestmentSignal, elapsedDays));
-        result.put("byGrade", computeSummaries(baseline, latestBySymbol, EvaluationHistoryEntity::getValueGrade, elapsedDays));
+        result.put("bySignal", computeSummaries(baseline, latestBySymbol, EvaluationHistoryEntity::getInvestmentSignal, elapsedDays, benchmarkPct));
+        result.put("byGrade", computeSummaries(baseline, latestBySymbol, EvaluationHistoryEntity::getValueGrade, elapsedDays, benchmarkPct));
         // 한 종목을 여러 프로파일이 추천했으면 각 프로파일 그룹에 모두 집계 (태그 없는 종목은 제외)
-        result.put("byProfile", computeMultiGroupSummaries(baseline, latestBySymbol, EvaluationPerformanceService::parseProfiles, elapsedDays));
+        result.put("byProfile", computeMultiGroupSummaries(baseline, latestBySymbol, EvaluationPerformanceService::parseProfiles, elapsedDays, benchmarkPct));
         return result;
+    }
+
+    /**
+     * 기준일~최신일 SPY 수익률 (%) — 각 스냅샷일 직전 미국 거래일 종가 기준
+     * @return 조회 실패·데이터 부족 시 null (성과 집계는 비교값 없이 그대로 제공)
+     */
+    Double fetchBenchmarkReturnPct(LocalDate fromDate, LocalDate latestDate) {
+        StockPriceVolumeReqDto req = new StockPriceVolumeReqDto(BENCHMARK_SYMBOL,
+                fromDate.minusDays(BENCHMARK_LOOKBACK_PAD_DAYS).toString(), latestDate.toString());
+        for (int attempt = 1; attempt <= BENCHMARK_FETCH_ATTEMPTS; attempt++) {
+            try {
+                return benchmarkReturnPct(stockPriceVolumeService.findStockPriceVolume(req), fromDate, latestDate);
+            } catch (RestClientException e) {
+                log.warn("[성과추적] {} 조회 실패 ({}/{}): {}", BENCHMARK_SYMBOL, attempt, BENCHMARK_FETCH_ATTEMPTS, e.getMessage());
+            }
+        }
+        return null;
+    }
+
+    /** 가격 이력에서 두 스냅샷일에 대응하는 종가로 수익률 (%) 계산. 대응 종가가 없으면 null */
+    static Double benchmarkReturnPct(List<StockPriceVolumeResDto> prices, LocalDate fromDate, LocalDate latestDate) {
+        if (prices == null || prices.isEmpty()) return null;
+        NavigableMap<LocalDate, Double> closes = new TreeMap<>();
+        for (StockPriceVolumeResDto p : prices) {
+            if (p.getDate() != null && p.getClose() != null && p.getClose() > 0) {
+                closes.put(LocalDate.parse(p.getDate()), p.getClose());
+            }
+        }
+        Map.Entry<LocalDate, Double> base = closes.floorEntry(fromDate.minusDays(BENCHMARK_CLOSE_LAG_DAYS));
+        Map.Entry<LocalDate, Double> latest = closes.floorEntry(latestDate.minusDays(BENCHMARK_CLOSE_LAG_DAYS));
+        if (base == null || latest == null || !latest.getKey().isAfter(base.getKey())) return null;
+        return round2((latest.getValue() / base.getValue() - 1) * 100);
     }
 
     /** 추천 프로파일 태그 분리 (없으면 빈 목록) */
@@ -201,11 +257,12 @@ public class EvaluationPerformanceService {
             List<EvaluationHistoryEntity> baseline,
             Map<String, EvaluationHistoryEntity> latestBySymbol,
             Function<EvaluationHistoryEntity, String> keyFn,
-            long elapsedDays) {
+            long elapsedDays,
+            Double benchmarkPct) {
         return computeMultiGroupSummaries(baseline, latestBySymbol, e -> {
             String key = keyFn.apply(e);
             return List.of(key == null ? UNCLASSIFIED_GROUP : key);
-        }, elapsedDays);
+        }, elapsedDays, benchmarkPct);
     }
 
     /**
@@ -217,7 +274,8 @@ public class EvaluationPerformanceService {
             List<EvaluationHistoryEntity> baseline,
             Map<String, EvaluationHistoryEntity> latestBySymbol,
             Function<EvaluationHistoryEntity, List<String>> keysFn,
-            long elapsedDays) {
+            long elapsedDays,
+            Double benchmarkPct) {
 
         final double threshold = largeMoveThresholdPct(elapsedDays);
 
@@ -280,24 +338,29 @@ public class EvaluationPerformanceService {
                 continue;
             }
             double sum = 0, max = Double.NEGATIVE_INFINITY, min = Double.POSITIVE_INFINITY;
-            int wins = 0;
+            int wins = 0, beats = 0;
             for (double r : returns) {
                 sum += r;
                 if (r > max) max = r;
                 if (r < min) min = r;
                 if (r > 0) wins++;
+                if (benchmarkPct != null && r > benchmarkPct) beats++;
             }
+            double avg = sum / n, med = median(returns);
             summaries.add(PerformanceSummaryDto.builder()
                     .group(entry.getKey())
                     .count(n)
-                    .avgReturnPct(round2(sum / n))
-                    .medianReturnPct(round2(median(returns)))
+                    .avgReturnPct(round2(avg))
+                    .medianReturnPct(round2(med))
                     .winRatePct(round2(wins * 100.0 / n))
                     .maxReturnPct(round2(max))
                     .minReturnPct(round2(min))
                     .excludedCount(excluded)
                     .unmatchedCount(unmatched)
                     .noBasePriceCount(noBasePrice)
+                    .excessAvgReturnPct(benchmarkPct == null ? null : round2(avg - benchmarkPct))
+                    .excessMedianReturnPct(benchmarkPct == null ? null : round2(med - benchmarkPct))
+                    .beatBenchmarkPct(benchmarkPct == null ? null : round2(beats * 100.0 / n))
                     .build());
         }
         return summaries;

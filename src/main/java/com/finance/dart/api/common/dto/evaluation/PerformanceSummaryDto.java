@@ -48,4 +48,13 @@ public class PerformanceSummaryDto {
 
     /** 기준일 스냅샷의 가격이 없거나 0 이하여서 기준가를 잡지 못한 종목 수 */
     private int noBasePriceCount;
+
+    /** 평균 수익률 − 같은 기간 SPY 수익률 (%p). 벤치마크 조회 실패 시 null */
+    private Double excessAvgReturnPct;
+
+    /** 중앙값 수익률 − 같은 기간 SPY 수익률 (%p). 벤치마크 조회 실패 시 null */
+    private Double excessMedianReturnPct;
+
+    /** SPY 수익률을 넘은 종목 비율 (%). 벤치마크 조회 실패 시 null */
+    private Double beatBenchmarkPct;
 }
