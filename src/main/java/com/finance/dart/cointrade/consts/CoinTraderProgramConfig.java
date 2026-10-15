@@ -15,13 +15,22 @@ public class CoinTraderProgramConfig {
 
     // API
 
+    /** 전략 ID 미지정 시 기본값 (일반화 전 화면 호환: 코인 BTC 추세) **/
+    public static final String DEFAULT_STRATEGY_ID = "btc_trend";
+
+    /** 전략 ID 허용 형식 (URL 쿼리에 그대로 붙이므로 검증) **/
+    public static final String STRATEGY_ID_PATTERN = "^[a-z0-9_]{1,30}$";
+
+    /** [v5.1 전략] 등록 전략(프리셋) 목록 **/
+    public static final String API_URI_STRATEGY_LIST = "api/strategy/list";
+
     /** [v5.0 전략] 상태 조회 **/
     public static final String API_URI_STRATEGY_STATUS = "api/strategy/status";
 
     /** [v5.0 전략] 실행 기록 **/
     public static final String API_URI_STRATEGY_RUNS = "api/strategy/runs";
 
-    /** [v5.0 전략] 설정 변경 (모드/투자금/실행시각) **/
+    /** [v5.0 전략] 설정 변경 (모드/투자금/실행시각/일시 중지 종목) **/
     public static final String API_URI_STRATEGY_SETTINGS = "api/strategy/settings";
 
     /** [v5.0 전략] 즉시 실행 **/
