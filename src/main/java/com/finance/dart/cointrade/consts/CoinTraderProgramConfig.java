@@ -10,7 +10,7 @@ public class CoinTraderProgramConfig {
 
     // Server
     public static final String localHost = "http://localhost:18082";
-    public static final String prodHost = "http://cointrader-service";
+    public static final String prodHost = "http://trader-service";
 
 
     // API
