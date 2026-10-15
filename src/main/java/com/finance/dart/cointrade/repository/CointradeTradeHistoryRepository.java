@@ -4,6 +4,7 @@ import com.finance.dart.cointrade.entity.CointradeTradeHistoryEntity;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -94,4 +95,11 @@ public interface CointradeTradeHistoryRepository extends JpaRepository<Cointrade
      * @return 신규 거래 기록 (시간순)
      */
     List<CointradeTradeHistoryEntity> findByCreatedAtAfterOrderByCreatedAtAsc(LocalDateTime createdAt);
+
+    /**
+     * 거래 기록에 존재하는 코인 코드 목록 (중복 제거, 오름차순)
+     * @return 코인 코드 목록
+     */
+    @Query("select distinct t.coinCode from CointradeTradeHistoryEntity t order by t.coinCode")
+    List<String> findDistinctCoinCodes();
 }

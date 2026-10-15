@@ -1,12 +1,11 @@
 package com.finance.dart.cointrade.controller;
 
-import com.finance.dart.cointrade.dto.*;
+import com.finance.dart.cointrade.dto.CointradeTradeHistoryDto;
 import com.finance.dart.cointrade.service.CointradeConfigService;
 import com.finance.dart.common.config.EndPointConfig;
 import com.finance.dart.common.dto.CommonResponse;
 import com.finance.dart.common.logging.TransactionLogging;
 import com.finance.dart.member.enums.RoleConstants;
-import jakarta.annotation.Nullable;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -16,14 +15,17 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
 
 /**
- * 코인 자동매매 설정 관리 컨트롤러
+ * 코인 자동매매 거래 기록 조회 컨트롤러
+ * (v5.0 전략 전환 후 레거시 설정/매매/스캐너/모의투자 API 제거 — 거래 기록 조회만 유지)
  */
 @Slf4j
 @RestController
@@ -34,73 +36,7 @@ public class CointradeConfigController {
     private final CointradeConfigService cointradeConfigService;
 
     /**
-     * 1. 전체 설정값 조회
-     * GET /api/cointrade/config
-     */
-    @EndPointConfig.RequireRole({RoleConstants.ROLE_SUPER_ADMIN})
-    @TransactionLogging
-    @GetMapping("/config")
-    public ResponseEntity<CommonResponse<List<CointradeConfigDto>>> getAllConfigs() {
-        log.info("전체 설정값 조회 요청");
-        List<CointradeConfigDto> configs = cointradeConfigService.getAllConfigs();
-        return new ResponseEntity<>(new CommonResponse<>(configs), HttpStatus.OK);
-    }
-
-    /**
-     * 2. 설정값 일괄 수정
-     * PUT /api/cointrade/config
-     */
-    @EndPointConfig.RequireRole({RoleConstants.ROLE_SUPER_ADMIN})
-    @TransactionLogging
-    @PutMapping("/config")
-    public ResponseEntity<CommonResponse<String>> updateConfigs(
-            @RequestBody List<CointradeConfigUpdateDto> configs) {
-        log.info("설정값 일괄 수정 요청: {}개", configs.size());
-        cointradeConfigService.updateConfigs(configs);
-        return new ResponseEntity<>(new CommonResponse<>("설정값 수정 완료"), HttpStatus.OK);
-    }
-
-    /**
-     * 3. 대상 종목 목록 조회 (DB 조회)
-     * GET /api/cointrade/coins
-     */
-    @TransactionLogging
-    @GetMapping("/coins")
-    public ResponseEntity<CommonResponse<List<CointradeTargetCoinDto>>> getAllTargetCoins() {
-        log.info("대상 종목 목록 조회 요청");
-        List<CointradeTargetCoinDto> coins = cointradeConfigService.getAllTargetCoins();
-        return new ResponseEntity<>(new CommonResponse<>(coins), HttpStatus.OK);
-    }
-
-    /**
-     * 4. 대상 종목 설정
-     * PUT /api/cointrade/coins
-     */
-    @EndPointConfig.RequireRole({RoleConstants.ROLE_SUPER_ADMIN})
-    @TransactionLogging
-    @PutMapping("/coins")
-    public ResponseEntity<CommonResponse<String>> updateTargetCoins(
-            @RequestBody List<String> coinCodes) {
-        log.info("대상 종목 설정 요청: {}", coinCodes);
-        cointradeConfigService.updateTargetCoins(coinCodes);
-        return new ResponseEntity<>(new CommonResponse<>("대상 종목 설정 완료"), HttpStatus.OK);
-    }
-
-    /**
-     * 5. 보유 종목 조회
-     * GET /api/cointrade/holdings
-     */
-    @EndPointConfig.RequireRole({RoleConstants.ROLE_SUPER_ADMIN})
-    @TransactionLogging
-    @GetMapping("/holdings")
-    public ResponseEntity<CommonResponse<List<CointradeHoldingDto>>> getAllHoldings() {
-        log.info("보유 종목 조회 요청");
-        List<CointradeHoldingDto> holdings = cointradeConfigService.getAllHoldings();
-        return new ResponseEntity<>(new CommonResponse<>(holdings), HttpStatus.OK);
-    }
-
-    /**
-     * 6. 거래 기록 조회 (페이징)
+     * 거래 기록 조회 (페이징)
      * GET /api/cointrade/history
      * Query Params: startDate, endDate, coinCode, tradeType, page, size
      */
@@ -124,263 +60,16 @@ public class CointradeConfigController {
     }
 
     /**
-     * 7. 매수 스케줄러 ON/OFF
-     * PUT /api/cointrade/scheduler/buy
+     * 거래 기록에 존재하는 코인 코드 목록 조회 (중복 제거, 오름차순)
+     * GET /api/cointrade/history/codes
+     * 거래 기록 화면의 종목 필터 선택지로 사용
      */
     @EndPointConfig.RequireRole({RoleConstants.ROLE_SUPER_ADMIN})
     @TransactionLogging
-    @PutMapping("/scheduler/buy")
-    public ResponseEntity<CommonResponse<String>> updateBuyScheduler(
-            @RequestBody CointradeSchedulerReqDto request) {
-        log.info("매수 스케줄러 설정 변경 요청: {}", request.getEnabled());
-        cointradeConfigService.updateBuyScheduler(request.getEnabled());
-        return new ResponseEntity<>(
-                new CommonResponse<>("매수 스케줄러 설정 완료: " + request.getEnabled()),
-                HttpStatus.OK);
+    @GetMapping("/history/codes")
+    public ResponseEntity<CommonResponse<List<String>>> getTradeHistoryCoinCodes() {
+        List<String> coinCodes = cointradeConfigService.getTradeHistoryCoinCodes();
+        log.info("거래 기록 코인 코드 목록 조회 - {}개", coinCodes.size());
+        return new ResponseEntity<>(new CommonResponse<>(coinCodes), HttpStatus.OK);
     }
-
-    /**
-     * 8. 매도 스케줄러 ON/OFF
-     * PUT /api/cointrade/scheduler/sell
-     */
-    @EndPointConfig.RequireRole({RoleConstants.ROLE_SUPER_ADMIN})
-    @TransactionLogging
-    @PutMapping("/scheduler/sell")
-    public ResponseEntity<CommonResponse<String>> updateSellScheduler(
-            @RequestBody CointradeSchedulerReqDto request) {
-        log.info("매도 스케줄러 설정 변경 요청: {}", request.getEnabled());
-        cointradeConfigService.updateSellScheduler(request.getEnabled());
-        return new ResponseEntity<>(
-                new CommonResponse<>("매도 스케줄러 설정 완료: " + request.getEnabled()),
-                HttpStatus.OK);
-    }
-
-    /**
-     * 9. 현재 상태 조회
-     * GET /api/cointrade/status
-     */
-    @EndPointConfig.RequireRole({RoleConstants.ROLE_SUPER_ADMIN})
-    @TransactionLogging
-    @GetMapping("/status")
-    public ResponseEntity<CommonResponse<CointradeStatusDto>> getStatus() {
-        log.info("현재 상태 조회 요청");
-        CointradeStatusDto status = cointradeConfigService.getStatus();
-        return new ResponseEntity<>(new CommonResponse<>(status), HttpStatus.OK);
-    }
-
-    /**
-     * 10. 매수 프로세스 수동 실행
-     * POST /api/cointrade/trade/buy/start
-     */
-    @EndPointConfig.RequireRole({RoleConstants.ROLE_SUPER_ADMIN})
-    @TransactionLogging
-    @PostMapping("/trade/buy/start")
-    public ResponseEntity<CommonResponse<Map<String, Object>>> startBuyProcess() {
-        log.info("매수 프로세스 수동 실행 요청");
-        Map<String, Object> result = cointradeConfigService.startBuyProcess();
-        return new ResponseEntity<>(new CommonResponse<>(result), HttpStatus.OK);
-    }
-
-    /**
-     * 11. 매도 프로세스 수동 실행
-     * POST /api/cointrade/trade/sell/start
-     */
-    @EndPointConfig.RequireRole({RoleConstants.ROLE_SUPER_ADMIN})
-    @TransactionLogging
-    @PostMapping("/trade/sell/start")
-    public ResponseEntity<CommonResponse<Map<String, Object>>> startSellProcess() {
-        log.info("매도 프로세스 수동 실행 요청");
-        Map<String, Object> result = cointradeConfigService.startSellProcess();
-        return new ResponseEntity<>(new CommonResponse<>(result), HttpStatus.OK);
-    }
-
-    /**
-     * 12. 매수/매도 프로세스 수동 중지
-     * @return
-     */
-    @EndPointConfig.RequireRole({RoleConstants.ROLE_SUPER_ADMIN})
-    @TransactionLogging
-    @PostMapping("/trade/stop")
-    public ResponseEntity<CommonResponse<Map<String, Object>>> stopProcess() {
-        log.info("매수/매도 프로세스 수동 중지 요청");
-        Map<String, Object> result = cointradeConfigService.stopProcess();
-        return new ResponseEntity<>(new CommonResponse<>(result), HttpStatus.OK);
-    }
-
-    /**
-     * 13. 모델 수동 학습
-     * @return
-     */
-    @EndPointConfig.RequireRole({RoleConstants.ROLE_SUPER_ADMIN})
-    @TransactionLogging
-    @GetMapping("/trade/model/train")
-    public ResponseEntity<CommonResponse<Map<String, Object>>> modelTrain(
-            @RequestParam(name = "coin_code") @Nullable String coinCode) {
-        log.info("모델 학습 수동 실행 요청");
-        Map<String, Object> result = cointradeConfigService.modelTrain(coinCode);
-        return new ResponseEntity<>(new CommonResponse<>(result), HttpStatus.OK);
-    }
-
-    /**
-     * 14. 스케줄러 설정 즉시 리로드
-     * POST /api/cointrade/scheduler/reload
-     */
-    @EndPointConfig.RequireRole({RoleConstants.ROLE_SUPER_ADMIN})
-    @TransactionLogging
-    @PostMapping("/scheduler/reload")
-    public ResponseEntity<CommonResponse<Map<String, Object>>> reloadScheduler() {
-        log.info("스케줄러 설정 즉시 리로드 요청");
-        Map<String, Object> result = cointradeConfigService.reloadScheduler();
-        return new ResponseEntity<>(new CommonResponse<>(result), HttpStatus.OK);
-    }
-
-    /**
-     * 15-1. 스캐너 시그널 목록 조회
-     * GET /api/cointrade/scanner/signals
-     */
-    @EndPointConfig.RequireRole({RoleConstants.ROLE_SUPER_ADMIN})
-    @TransactionLogging
-    @GetMapping("/scanner/signals")
-    public ResponseEntity<CommonResponse<List<Map<String, Object>>>> getScannerSignals() {
-        log.info("스캐너 시그널 목록 조회 요청");
-        List<Map<String, Object>> result = cointradeConfigService.getScannerSignals();
-        return new ResponseEntity<>(new CommonResponse<>(result), HttpStatus.OK);
-    }
-
-    /**
-     * 15-2. 스캐너 상태 조회
-     * GET /api/cointrade/scanner/status
-     */
-    @EndPointConfig.RequireRole({RoleConstants.ROLE_SUPER_ADMIN})
-    @TransactionLogging
-    @GetMapping("/scanner/status")
-    public ResponseEntity<CommonResponse<Map<String, Object>>> getScannerStatus() {
-        log.info("스캐너 상태 조회 요청");
-        Map<String, Object> result = cointradeConfigService.getScannerStatus();
-        return new ResponseEntity<>(new CommonResponse<>(result), HttpStatus.OK);
-    }
-
-    /**
-     * 16. 업비트 KRW 잔액 조회
-     * GET /api/cointrade/account/balance
-     */
-    @EndPointConfig.RequireRole({RoleConstants.ROLE_SUPER_ADMIN})
-    @TransactionLogging
-    @GetMapping("/account/balance")
-    public ResponseEntity<CommonResponse<Map<String, Object>>> getAccountBalance() {
-        log.info("업비트 KRW 잔액 조회 요청");
-        Map<String, Object> result = cointradeConfigService.getAccountBalance();
-        return new ResponseEntity<>(new CommonResponse<>(result), HttpStatus.OK);
-    }
-
-    /**
-     * 16-1. 업비트 전체 계좌 조회 (KRW + 모든 보유 코인)
-     * GET /api/cointrade/account/balances
-     * - DB 보유종목(CointradeHoldingEntity)과 대조해 수량 불일치/미추적 코인을 UI에 경고 표시
-     */
-    @EndPointConfig.RequireRole({RoleConstants.ROLE_SUPER_ADMIN})
-    @TransactionLogging
-    @GetMapping("/account/balances")
-    public ResponseEntity<CommonResponse<Map<String, Object>>> getAccountBalances() {
-        log.info("업비트 전체 계좌 조회 요청");
-        Map<String, Object> result = cointradeConfigService.getAccountBalances();
-        return new ResponseEntity<>(new CommonResponse<>(result), HttpStatus.OK);
-    }
-
-    /**
-     * 16-2. 먼지(dust) 잔량 조회
-     * GET /api/cointrade/dust?status=ACTIVE|RESOLVED|ALL
-     * - 업비트 최소 주문금액(5,000원) 미만으로 API 매도 불가한 격리 잔량 목록
-     */
-    @EndPointConfig.RequireRole({RoleConstants.ROLE_SUPER_ADMIN})
-    @TransactionLogging
-    @GetMapping("/dust")
-    public ResponseEntity<CommonResponse<List<Map<String, Object>>>> getDustBalances(
-            @RequestParam(value = "status", required = false) String status) {
-        log.info("먼지 잔량 조회 요청 - status: {}", status);
-        List<Map<String, Object>> result = cointradeConfigService.getDustBalances(status);
-        return new ResponseEntity<>(new CommonResponse<>(result), HttpStatus.OK);
-    }
-
-    /**
-     * 16-3. 먼지 정리완료 처리
-     * POST /api/cointrade/dust/{dustId}/resolve
-     * - 사용자가 수동 정리 후 상태를 RESOLVED 로 변경
-     */
-    @EndPointConfig.RequireRole({RoleConstants.ROLE_SUPER_ADMIN})
-    @TransactionLogging
-    @PostMapping("/dust/{dustId}/resolve")
-    public ResponseEntity<CommonResponse<Map<String, Object>>> resolveDust(
-            @PathVariable("dustId") int dustId,
-            @RequestBody(required = false) Map<String, String> body) {
-        String note = (body != null) ? body.get("note") : null;
-        log.info("먼지 정리완료 요청 - dustId: {}, note: {}", dustId, note);
-        Map<String, Object> result = cointradeConfigService.resolveDust(dustId, note);
-        return new ResponseEntity<>(new CommonResponse<>(result), HttpStatus.OK);
-    }
-
-    /**
-     * 17. 모의투자 보유 종목 조회
-     * GET /api/cointrade/paper/holdings
-     */
-    @EndPointConfig.RequireRole({RoleConstants.ROLE_SUPER_ADMIN})
-    @TransactionLogging
-    @GetMapping("/paper/holdings")
-    public ResponseEntity<CommonResponse<Object>> getPaperHoldings() {
-        log.info("모의투자 보유 종목 조회 요청");
-        Object result = cointradeConfigService.getPaperHoldings();
-        return new ResponseEntity<>(new CommonResponse<>(result), HttpStatus.OK);
-    }
-
-    /**
-     * 18. 모의투자 거래 기록 조회
-     * GET /api/cointrade/paper/history
-     */
-    @EndPointConfig.RequireRole({RoleConstants.ROLE_SUPER_ADMIN})
-    @TransactionLogging
-    @GetMapping("/paper/history")
-    public ResponseEntity<CommonResponse<Object>> getPaperHistory(
-            @RequestParam(required = false, name = "limit") Integer limit) {
-        log.info("모의투자 거래 기록 조회 요청 - limit: {}", limit);
-        Object result = cointradeConfigService.getPaperHistory(limit);
-        return new ResponseEntity<>(new CommonResponse<>(result), HttpStatus.OK);
-    }
-
-    /**
-     * 19. 모의투자 데이터 초기화
-     * DELETE /api/cointrade/paper/reset
-     */
-    @EndPointConfig.RequireRole({RoleConstants.ROLE_SUPER_ADMIN})
-    @TransactionLogging
-    @DeleteMapping("/paper/reset")
-    public ResponseEntity<CommonResponse<Map<String, Object>>> resetPaperData() {
-        log.info("모의투자 데이터 초기화 요청");
-        Map<String, Object> result = cointradeConfigService.resetPaperData();
-        return new ResponseEntity<>(new CommonResponse<>(result), HttpStatus.OK);
-    }
-
-    /**
-     * 20. 통합 모델 상태 조회
-     * GET /api/cointrade/model-status
-     */
-    @EndPointConfig.RequireRole({RoleConstants.ROLE_SUPER_ADMIN})
-    @TransactionLogging
-    @GetMapping("/model-status")
-    public ResponseEntity<CommonResponse<Map<String, Object>>> getModelStatus() {
-        Map<String, Object> result = cointradeConfigService.getModelStatus();
-        return new ResponseEntity<>(new CommonResponse<>(result), HttpStatus.OK);
-    }
-
-    /**
-     * 21. 재학습 진행률 상태 조회
-     * GET /api/cointrade/retrain/status
-     */
-    @EndPointConfig.RequireRole({RoleConstants.ROLE_SUPER_ADMIN})
-    @TransactionLogging
-    @GetMapping("/retrain/status")
-    public ResponseEntity<CommonResponse<Map<String, Object>>> getRetrainStatus() {
-        Map<String, Object> result = cointradeConfigService.getRetrainStatus();
-        return new ResponseEntity<>(new CommonResponse<>(result), HttpStatus.OK);
-    }
-
 }

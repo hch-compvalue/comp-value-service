@@ -4,7 +4,6 @@ package com.finance.dart.cointrade.controller;
 import com.finance.dart.cointrade.dto.CointradeLogContentDto;
 import com.finance.dart.cointrade.dto.CointradeLogFileInfoDto;
 import com.finance.dart.cointrade.dto.CointradeLogFileListDto;
-import com.finance.dart.cointrade.dto.CointradeProcessStatusDto;
 import com.finance.dart.cointrade.service.CointradeLogService;
 import com.finance.dart.common.dto.CommonResponse;
 import com.finance.dart.common.logging.TransactionLogging;
@@ -113,29 +112,6 @@ public class CointradeLogController {
             log.error("최신 로그 조회 실패 - lastLine: {}, initialLines, error: {}", lastLine, initialLines, e.getMessage(), e);
             CommonResponse<CointradeLogContentDto> errorResponse = new CommonResponse<>();
             errorResponse.setMessage("최신 로그 조회 실패: " + e.getMessage());
-            return new ResponseEntity<>(errorResponse, HttpStatus.INTERNAL_SERVER_ERROR);
-        }
-    }
-
-    /**
-     * 프로세스 진행율 상태 조회
-     */
-    @TransactionLogging
-    @GetMapping("/process/status")
-    public ResponseEntity<CommonResponse<CointradeProcessStatusDto>> getProcessStatus(
-            @RequestParam(name = "mode", required = false) String mode
-    ) {
-        if(log.isDebugEnabled()) log.debug("/api/cointrade/log/process/status 거래 요청 - mode: {}", mode);
-
-        try {
-            CointradeProcessStatusDto statusDto = logService.getProcessStatus(mode);
-            CommonResponse<CointradeProcessStatusDto> response = new CommonResponse<>(statusDto);
-            response.setMessage("프로세스 상태 조회 성공");
-            return new ResponseEntity<>(response, HttpStatus.OK);
-        } catch (Exception e) {
-            log.error("프로세스 상태 조회 실패 - error: {}", e.getMessage(), e);
-            CommonResponse<CointradeProcessStatusDto> errorResponse = new CommonResponse<>();
-            errorResponse.setMessage("프로세스 상태 조회 실패: " + e.getMessage());
             return new ResponseEntity<>(errorResponse, HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }

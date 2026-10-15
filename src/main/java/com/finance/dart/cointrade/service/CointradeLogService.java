@@ -4,7 +4,6 @@ import com.finance.dart.cointrade.consts.CoinTraderProgramConfig;
 import com.finance.dart.cointrade.dto.CointradeLogContentDto;
 import com.finance.dart.cointrade.dto.CointradeLogFileInfoDto;
 import com.finance.dart.cointrade.dto.CointradeLogFileListDto;
-import com.finance.dart.cointrade.dto.CointradeProcessStatusDto;
 import com.finance.dart.common.component.HttpClientComponent;
 import com.finance.dart.common.logging.TransactionLogging;
 import lombok.RequiredArgsConstructor;
@@ -123,42 +122,6 @@ public class CointradeLogService {
         } catch (Exception e) {
             log.error("코인 최신 로그 증분 조회 실패 - filename: {}, error: {}", filename, e.getMessage(), e);
             throw new RuntimeException("Failed to get latest log stream", e);
-        }
-    }
-
-    /**
-     * 프로세스 진행율 상태 조회
-     */
-    public CointradeProcessStatusDto getProcessStatus(String mode) {
-        String uri = CoinTraderProgramConfig.API_URI_PROCESS_STATUS_BUY;
-        if ("sell".equalsIgnoreCase(mode)) {
-            uri = CoinTraderProgramConfig.API_URI_PROCESS_STATUS_SELL;
-        }
-        
-        String url = buildUrl(uri);
-
-        if (log.isDebugEnabled()) {
-            log.debug("코인 프로세스 상태 조회 API 호출 - URL: {}, mode: {}", url, mode);
-        }
-
-        try {
-            return httpClientComponent.exchangeSync(
-                    url,
-                    HttpMethod.GET,
-                    new ParameterizedTypeReference<CointradeProcessStatusDto>() {}
-            ).getBody();
-        } catch (Exception e) {
-            log.error("코인 프로세스 상태 조회 실패 (기본값 반환) - error: {}", e.getMessage());
-            
-            // 오류 발생 시 기본값(idle) 반환
-            CointradeProcessStatusDto defaultStatus = new CointradeProcessStatusDto();
-            defaultStatus.setStatus("idle");
-            defaultStatus.setMode(null);
-            defaultStatus.setPercent(0.0);
-            defaultStatus.setMessage("");
-            defaultStatus.setLastUpdated("");
-            
-            return defaultStatus;
         }
     }
 
