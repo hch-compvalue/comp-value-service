@@ -34,6 +34,9 @@ public class ScheduleManagerService {
     /** 스케줄 시간대 (파드 TZ와 동일하게 명시) */
     public static final ZoneId SCHEDULE_ZONE = ZoneId.of("Asia/Seoul");
 
+    /** k8s DB 백업 CronJob이 실행 이력에 기록하는 job_key (gos ncloud/backend/db/backup-cronjob.yml과 일치) */
+    public static final String DB_BACKUP_JOB_KEY = "DB_BACKUP";
+
     /** 자동 실행은 항상 전체 처리 */
     private static final int AUTO_RUN_MAX_COUNT = 0;
 
@@ -128,6 +131,17 @@ public class ScheduleManagerService {
         ScheduleJobType type = resolveType(jobKey);
         int size = Math.max(1, Math.min(limit, MAX_HISTORY_LIMIT));
         return scheduleRunHistoryService.getRecent(type, size).stream()
+                .map(ScheduleRunHistoryDto::from)
+                .toList();
+    }
+
+    /**
+     * 외부 작업(k8s DB 백업 CronJob)의 최근 실행 이력
+     * - 백업 스크립트가 끝날 때 tb_schedule_run_history에 job_key=DB_BACKUP으로 직접 기록 (gos backup-cronjob.yml)
+     */
+    public List<ScheduleRunHistoryDto> getDbBackupHistory(int limit) {
+        int size = Math.max(1, Math.min(limit, MAX_HISTORY_LIMIT));
+        return scheduleRunHistoryService.getRecent(DB_BACKUP_JOB_KEY, size).stream()
                 .map(ScheduleRunHistoryDto::from)
                 .toList();
     }

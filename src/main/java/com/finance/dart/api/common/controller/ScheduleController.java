@@ -82,4 +82,15 @@ public class ScheduleController {
         return new ResponseEntity<>(new CommonResponse<>(scheduleManagerService.getHistory(jobKey, limit)), HttpStatus.OK);
     }
 
+    /**
+     * DB 백업(k8s CronJob) 최근 실행 이력 — 조회 전용, 주기 변경은 gos에서
+     */
+    @EndPointConfig.RequireRole({RoleConstants.ROLE_SUPER_ADMIN})
+    @GetMapping("/external/db-backup/history")
+    public ResponseEntity<CommonResponse<List<ScheduleRunHistoryDto>>> getDbBackupHistory(
+            @RequestParam(name = "limit", defaultValue = DEFAULT_HISTORY_LIMIT) int limit) {
+
+        return new ResponseEntity<>(new CommonResponse<>(scheduleManagerService.getDbBackupHistory(limit)), HttpStatus.OK);
+    }
+
 }

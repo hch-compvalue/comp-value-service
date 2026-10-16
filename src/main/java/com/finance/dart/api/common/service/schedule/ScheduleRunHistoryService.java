@@ -78,7 +78,15 @@ public class ScheduleRunHistoryService {
      */
     @Transactional(readOnly = true)
     public List<ScheduleRunHistoryEntity> getRecent(ScheduleJobType type, int limit) {
-        return scheduleRunHistoryRepository.findByJobKeyOrderByStartedAtDesc(type.name(), PageRequest.of(0, limit));
+        return getRecent(type.name(), limit);
+    }
+
+    /**
+     * job_key 문자열 기준 최근 이력 (백엔드 밖에서 기록하는 작업용 — 예: k8s DB 백업 CronJob)
+     */
+    @Transactional(readOnly = true)
+    public List<ScheduleRunHistoryEntity> getRecent(String jobKey, int limit) {
+        return scheduleRunHistoryRepository.findByJobKeyOrderByStartedAtDesc(jobKey, PageRequest.of(0, limit));
     }
 
     /**
