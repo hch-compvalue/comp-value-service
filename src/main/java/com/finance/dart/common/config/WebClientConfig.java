@@ -48,8 +48,8 @@ public class WebClientConfig {
         return ExchangeFilterFunction.ofRequestProcessor(clientRequest -> {
             if (RequestTrafficTracker.isInUserRequest()) {
                 String url = clientRequest.url().toString();
-                if (url.contains("18082") || url.contains("cointrader")) {
-                    downstreamTrafficTracker.trackCointrader();
+                if (url.contains("18082") || url.contains("trader-service")) {
+                    downstreamTrafficTracker.trackTrader();
                 } else if (url.contains("18081") || url.contains("stock-predictor") || url.contains("predictor")) {
                     downstreamTrafficTracker.trackMl();
                 }

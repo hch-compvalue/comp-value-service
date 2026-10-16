@@ -45,12 +45,11 @@ public class MonitoringAggregatorService {
     @Scheduled(fixedDelay = 3000)
     public void aggregateSnapshot() {
         try {
-            // 서비스 상태 수집 (6개: web, backend, cointrader, stock-predictor, postgresql, redis)
+            // 서비스 상태 수집 (5개: web, backend, trader, postgresql, redis) — stock-predictor는 2026-10-16 기능 삭제·replicas 0으로 제외
             List<ServiceStatusDto> services = new ArrayList<>();
             services.add(safeGetHealth("comp-value-admin", () -> cointraderStatusService.getWebHealth()));
             services.add(getBackendStatus());
-            services.add(safeGetHealth("cointrader", () -> cointraderStatusService.getCointraderHealth()));
-            services.add(safeGetHealth("stock-predictor", () -> cointraderStatusService.getStockPredictorHealth()));
+            services.add(safeGetHealth("trader", () -> cointraderStatusService.getTraderHealth()));
             services.add(safeGetHealth("postgresql", () -> cointraderStatusService.getPostgresHealth()));
             services.add(safeGetHealth("redis", () -> cointraderStatusService.getRedisHealth()));
 

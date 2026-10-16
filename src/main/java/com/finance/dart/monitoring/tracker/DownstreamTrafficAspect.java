@@ -23,7 +23,7 @@ public class DownstreamTrafficAspect {
 
     @PostConstruct
     public void init() {
-        log.info("[TrafficAspect] 초기화 완료 — DB/Redis/Cointrader/ML 트래픽 AOP 추적 활성화");
+        log.info("[TrafficAspect] 초기화 완료 — DB/Redis/Trader/ML 트래픽 AOP 추적 활성화");
     }
 
     /** Spring Data Repository 호출 → DB (PostgreSQL) 트래픽 */
@@ -46,14 +46,14 @@ public class DownstreamTrafficAspect {
     }
 
     /**
-     * Cointrade 서비스 패키지 호출 → Cointrader 트래픽
-     * (HttpClientComponent.exchangeSync 로 cointrader API 호출)
+     * Cointrade 서비스 패키지 호출 → Trader(자동매매) 트래픽
+     * (HttpClientComponent.exchangeSync 로 trader-service API 호출)
      */
     @Around("execution(* com.finance.dart.cointrade.service..*.*(..))")
-    public Object trackCointrader(ProceedingJoinPoint pjp) throws Throwable {
+    public Object trackTrader(ProceedingJoinPoint pjp) throws Throwable {
         if (RequestTrafficTracker.isInUserRequest()) {
-            tracker.trackCointrader();
-            log.debug("[TrafficAspect] Cointrader 호출 감지: {}", pjp.getSignature().toShortString());
+            tracker.trackTrader();
+            log.debug("[TrafficAspect] Trader 호출 감지: {}", pjp.getSignature().toShortString());
         }
         return pjp.proceed();
     }

@@ -3,14 +3,17 @@ package com.finance.dart.cointrade.service;
 import com.finance.dart.cointrade.dto.CointradeTradeHistoryDto;
 import com.finance.dart.cointrade.entity.CointradeTradeHistoryEntity;
 import com.finance.dart.cointrade.repository.CointradeTradeHistoryRepository;
+import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -35,25 +38,16 @@ public class CointradeConfigService {
             String tradeType,
             Pageable pageable) {
 
-        Page<CointradeTradeHistoryEntity> entities;
-
-        // 조건별 조회
-        if (coinCode != null && !coinCode.isEmpty() && startDate != null && endDate != null) {
-            // 종목 + 날짜 범위
-            entities = tradeHistoryRepository.findByCoinCodeAndCreatedAtBetween(
-                    coinCode, startDate, endDate, pageable);
-        } else if (coinCode != null && !coinCode.isEmpty()) {
-            // 종목별 조회
-            entities = tradeHistoryRepository.findByCoinCodeOrderByCreatedAtDesc(
-                    coinCode, pageable);
-        } else if (startDate != null && endDate != null) {
-            // 날짜 범위 조회
-            entities = tradeHistoryRepository.findByCreatedAtBetween(
-                    startDate, endDate, pageable);
-        } else {
-            // 전체 조회
-            entities = tradeHistoryRepository.findByOrderByCreatedAtDesc(pageable);
-        }
+        // 종목·매매구분·기간 조건을 있는 것만 조합 (정렬은 pageable, 기본 createdAt DESC)
+        Specification<CointradeTradeHistoryEntity> spec = (root, query, cb) -> {
+            List<Predicate> conditions = new ArrayList<>();
+            if (coinCode != null && !coinCode.isBlank()) conditions.add(cb.equal(root.get("coinCode"), coinCode));
+            if (tradeType != null && !tradeType.isBlank()) conditions.add(cb.equal(root.get("tradeType"), tradeType));
+            if (startDate != null) conditions.add(cb.greaterThanOrEqualTo(root.get("createdAt"), startDate));
+            if (endDate != null) conditions.add(cb.lessThanOrEqualTo(root.get("createdAt"), endDate));
+            return cb.and(conditions.toArray(new Predicate[0]));
+        };
+        Page<CointradeTradeHistoryEntity> entities = tradeHistoryRepository.findAll(spec, pageable);
 
         return entities.map(entity -> CointradeTradeHistoryDto.builder()
                 .id(entity.getId())

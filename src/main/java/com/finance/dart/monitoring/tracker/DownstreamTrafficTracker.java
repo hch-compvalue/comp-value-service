@@ -14,12 +14,12 @@ public class DownstreamTrafficTracker {
 
     private final AtomicInteger dbCount = new AtomicInteger(0);
     private final AtomicInteger redisCount = new AtomicInteger(0);
-    private final AtomicInteger cointraderCount = new AtomicInteger(0);
+    private final AtomicInteger traderCount = new AtomicInteger(0);
     private final AtomicInteger mlCount = new AtomicInteger(0);
 
     public void trackDb() { dbCount.incrementAndGet(); }
     public void trackRedis() { redisCount.incrementAndGet(); }
-    public void trackCointrader() { cointraderCount.incrementAndGet(); }
+    public void trackTrader() { traderCount.incrementAndGet(); }
     public void trackMl() { mlCount.incrementAndGet(); }
 
     /** 모든 카운터를 읽고 리셋 */
@@ -27,7 +27,7 @@ public class DownstreamTrafficTracker {
         return Map.of(
                 "db", dbCount.getAndSet(0),
                 "redis", redisCount.getAndSet(0),
-                "cointrader", cointraderCount.getAndSet(0),
+                "trader", traderCount.getAndSet(0),
                 "ml", mlCount.getAndSet(0)
         );
     }
@@ -37,7 +37,7 @@ public class DownstreamTrafficTracker {
         return Map.of(
                 "db", dbCount.get(),
                 "redis", redisCount.get(),
-                "cointrader", cointraderCount.get(),
+                "trader", traderCount.get(),
                 "ml", mlCount.get()
         );
     }

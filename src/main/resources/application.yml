@@ -104,10 +104,8 @@ monitoring:
     url: ${PROMETHEUS_URL:http://prometheus.monitoring.svc.cluster.local:9090}
     enabled: ${MONITORING_PROMETHEUS_ENABLED:false}
     namespace: ${PROMETHEUS_NAMESPACE:default}
-  cointrader:
-    url: ${COINTRADER_URL:http://localhost:18082}
-  stock-predictor:
-    url: ${STOCK_PREDICTOR_URL:http://localhost:18081}
+  trader:
+    url: ${TRADER_URL:${COINTRADER_URL:http://localhost:18082}}   # 자동매매 trader-service (COINTRADER_URL은 구 이름 호환)
   web:
     url: ${WEB_URL:http://localhost:80}
 

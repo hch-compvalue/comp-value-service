@@ -23,7 +23,6 @@ import com.finance.dart.api.abroad.dto.fmp.quote.AfterTradeReqDto;
 import com.finance.dart.api.abroad.dto.fmp.quote.AfterTradeResDto;
 import com.finance.dart.api.abroad.dto.fmp.quote.StockQuoteReqDto;
 import com.finance.dart.api.abroad.dto.fmp.quote.StockQuoteResDto;
-import com.finance.dart.stockpredictor.dto.PredictionResponseDto;
 import com.finance.dart.api.abroad.service.fmp.*;
 import com.finance.dart.api.common.dto.CompanySharePriceCalculator;
 import com.finance.dart.api.common.dto.CompanySharePriceResult;
@@ -458,10 +457,7 @@ public class US_StockCalFromFpmService {
         String 목표매도가 = calcHelper.calculateSellTarget(계산된주당가치);
         String 손절매가 = calcHelper.calculateStopLoss(매수적정가);
 
-        //@7. AI 예측값 조회 ---------------------------------
-        PredictionResponseDto predictionResponseDto = helper.predictWeeklyHigh(symbol);
-
-        //@8. 결과 조립 ---------------------------------
+        //@7. 결과 조립 ---------------------------------
         result.set버전(VERSION.toUpperCase());
         result.set섹터(sector);
         if(StringUtil.isStringEmpty(result.get결과메시지())) result.set결과메시지("정상 처리되었습니다.");
@@ -481,7 +477,6 @@ public class US_StockCalFromFpmService {
             result.set현재가격(StringUtil.defaultString(companyProfile.getPrice()));
         }
         result.set확인시간(DateUtil.getToday("yyyy-MM-dd HH:mm:ss"));
-        result.set예측데이터(predictionResponseDto);
         helper.setRstDetailContextData(resultDetail);
 
         result.set상세정보(resultDetail);
@@ -945,10 +940,7 @@ public class US_StockCalFromFpmService {
         String 목표매도가 = calcHelper.calculateSellTarget(계산된주당가치);
         String 손절매가 = calcHelper.calculateStopLoss(매수적정가);
 
-        //@7. AI 예측값 조회 ---------------------------------
-        PredictionResponseDto predictionResponseDto = helper.predictWeeklyHigh(symbol);
-
-        //@8. 결과 조립 ---------------------------------
+        //@7. 결과 조립 ---------------------------------
         result.set버전(VERSION.toUpperCase());
         result.set섹터(sector);
         if(StringUtil.isStringEmpty(result.get결과메시지())) result.set결과메시지("정상 처리되었습니다.");
@@ -968,7 +960,6 @@ public class US_StockCalFromFpmService {
             result.set현재가격(StringUtil.defaultString(companyProfile.getPrice()));
         }
         result.set확인시간(DateUtil.getToday("yyyy-MM-dd HH:mm:ss"));
-        result.set예측데이터(predictionResponseDto);
         helper.setRstDetailContextData(resultDetail);
 
         result.set상세정보(resultDetail);

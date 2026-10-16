@@ -1,6 +1,7 @@
 package com.finance.dart.cointrade.service;
 
 import com.finance.dart.cointrade.consts.CoinTraderProgramConfig;
+import com.finance.dart.cointrade.exception.TraderLogException;
 import com.finance.dart.cointrade.dto.CointradeLogContentDto;
 import com.finance.dart.cointrade.dto.CointradeLogFileInfoDto;
 import com.finance.dart.cointrade.dto.CointradeLogFileListDto;
@@ -12,6 +13,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpMethod;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClientException;
 
 /**
  * 코인 자동매매 로그 서비스
@@ -43,9 +45,9 @@ public class CointradeLogService {
                     HttpMethod.GET,
                     new ParameterizedTypeReference<CointradeLogFileListDto>() {}
             ).getBody();
-        } catch (Exception e) {
+        } catch (RestClientException e) {
             log.error("코인 로그 파일 목록 조회 실패 - error: {}", e.getMessage(), e);
-            throw new RuntimeException("Failed to get log file list", e);
+            throw new TraderLogException("Failed to get log file list", e);
         }
     }
 
@@ -65,9 +67,9 @@ public class CointradeLogService {
                     HttpMethod.GET,
                     new ParameterizedTypeReference<CointradeLogFileInfoDto>() {}
             ).getBody();
-        } catch (Exception e) {
+        } catch (RestClientException e) {
             log.error("코인 최신 로그 파일 정보 조회 실패 - error: {}", e.getMessage(), e);
-            throw new RuntimeException("Failed to get latest log file info", e);
+            throw new TraderLogException("Failed to get latest log file info", e);
         }
     }
 
@@ -89,9 +91,9 @@ public class CointradeLogService {
                     HttpMethod.GET,
                     new ParameterizedTypeReference<CointradeLogContentDto>() {}
             ).getBody();
-        } catch (Exception e) {
+        } catch (RestClientException e) {
             log.error("코인 로그 내용 조회 실패 - filename: {}, error: {}", filename, e.getMessage(), e);
-            throw new RuntimeException("Failed to get log content", e);
+            throw new TraderLogException("Failed to get log content", e);
         }
     }
 
@@ -102,7 +104,7 @@ public class CointradeLogService {
         // 1. 최신 로그 파일 정보 먼저 조회
         CointradeLogFileInfoDto latestInfo = getLatestLogFileInfo();
         if (latestInfo == null || latestInfo.getFilename() == null) {
-            throw new RuntimeException("Latest log file info not found");
+            throw new TraderLogException("Latest log file info not found");
         }
 
         String filename = latestInfo.getFilename();
@@ -119,9 +121,9 @@ public class CointradeLogService {
                     HttpMethod.GET,
                     new ParameterizedTypeReference<CointradeLogContentDto>() {}
             ).getBody();
-        } catch (Exception e) {
+        } catch (RestClientException e) {
             log.error("코인 최신 로그 증분 조회 실패 - filename: {}, error: {}", filename, e.getMessage(), e);
-            throw new RuntimeException("Failed to get latest log stream", e);
+            throw new TraderLogException("Failed to get latest log stream", e);
         }
     }
 

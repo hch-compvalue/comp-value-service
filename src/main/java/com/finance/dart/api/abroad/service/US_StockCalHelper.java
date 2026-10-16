@@ -15,8 +15,6 @@ import com.finance.dart.api.common.dto.CompanySharePriceCalculator;
 import com.finance.dart.api.common.dto.CompanySharePriceResult;
 import com.finance.dart.api.common.dto.CompanySharePriceResultDetail;
 import com.finance.dart.common.util.StringUtil;
-import com.finance.dart.stockpredictor.dto.PredictionResponseDto;
-import com.finance.dart.stockpredictor.service.MlService;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -39,7 +37,6 @@ public class US_StockCalHelper {
     private final CompanyProfileSearchService profileSearchService;
     private final ForexQuoteService forexQuoteService;
     private final StockPriceVolumeService stockPriceVolumeService;
-    private final MlService mlService;
 
     /**
      * 기업정보 조회
@@ -245,20 +242,5 @@ public class US_StockCalHelper {
             log.warn("[52주 최고가] {} - 조회 실패: {}", symbol, e.getMessage());
             return null;
         }
-    }
-
-    /**
-     * 1주내 최고가 예측값 조회
-     */
-    public PredictionResponseDto predictWeeklyHigh(String symbol) {
-
-        try {
-            PredictionResponseDto predictionResponseDto = mlService.getPrediction(symbol, false);
-            return predictionResponseDto;
-        } catch (Exception e) {
-            if(log.isDebugEnabled()) log.debug("[predictWeeklyHigh] 예측 실패, message = {}", e.getMessage());
-        }
-
-        return null;
     }
 }

@@ -4,6 +4,7 @@ import com.finance.dart.cointrade.entity.CointradeTradeHistoryEntity;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 
 import java.time.LocalDateTime;
@@ -12,7 +13,8 @@ import java.util.List;
 /**
  * 코인 자동매매 거래 기록 Repository
  */
-public interface CointradeTradeHistoryRepository extends JpaRepository<CointradeTradeHistoryEntity, Long> {
+public interface CointradeTradeHistoryRepository extends JpaRepository<CointradeTradeHistoryEntity, Long>,
+        JpaSpecificationExecutor<CointradeTradeHistoryEntity> {
 
     /**
      * 종목별 거래 기록 조회

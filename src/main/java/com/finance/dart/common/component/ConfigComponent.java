@@ -47,5 +47,5 @@ public class ConfigComponent {
      * 업비트 SECRET KEY
      * @return
      */
-    public String getUpbitSecretKey() { return env.getProperty("UPBIT_OPEN_API_ACCESS_KEY"); }
+    public String getUpbitSecretKey() { return env.getProperty("UPBIT_OPEN_API_SECRET_KEY"); }
 }

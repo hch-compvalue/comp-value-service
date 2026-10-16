@@ -35,7 +35,6 @@ import com.finance.dart.common.exception.BizException;
 import com.finance.dart.common.util.CalUtil;
 import com.finance.dart.common.util.DateUtil;
 import com.finance.dart.common.util.StringUtil;
-import com.finance.dart.stockpredictor.dto.PredictionResponseDto;
 import com.google.gson.Gson;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -555,8 +554,6 @@ public class US_StockCalLegacyService {
             }
         }
 
-        PredictionResponseDto predictionResponseDto = helper.predictWeeklyHigh(symbol);
-
         result.set버전(VERSION.toUpperCase());
         result.set섹터(sector);
         if(StringUtil.isStringEmpty(result.get결과메시지())) result.set결과메시지("정상 처리되었습니다.");
@@ -564,7 +561,6 @@ public class US_StockCalLegacyService {
         result.set계산된주당가치(계산된주당가치);
         result.set현재가격(StringUtil.defaultString(companyProfile.getPrice()));
         result.set확인시간(DateUtil.getToday("yyyy-MM-dd HH:mm:ss"));
-        result.set예측데이터(predictionResponseDto);
         helper.setRstDetailContextData(resultDetail);
 
         result.set상세정보(resultDetail);
@@ -634,8 +630,6 @@ public class US_StockCalLegacyService {
             }
         }
 
-        PredictionResponseDto predictionResponseDto = helper.predictWeeklyHigh(symbol);
-
         result.set버전(VERSION.toUpperCase());
         result.set섹터(sector);
         if(StringUtil.isStringEmpty(result.get결과메시지())) result.set결과메시지("정상 처리되었습니다.");
@@ -643,7 +637,6 @@ public class US_StockCalLegacyService {
         result.set계산된주당가치(계산된주당가치);
         result.set현재가격(StringUtil.defaultString(companyProfile.getPrice()));
         result.set확인시간(DateUtil.getToday("yyyy-MM-dd HH:mm:ss"));
-        result.set예측데이터(predictionResponseDto);
         helper.setRstDetailContextData(resultDetail);
 
         result.set상세정보(resultDetail);
@@ -783,8 +776,6 @@ public class US_StockCalLegacyService {
             log.warn("[V7 그레이엄 스크리닝] {} - 스크리닝 실패: {}", symbol, e.getMessage());
         }
 
-        PredictionResponseDto predictionResponseDto = helper.predictWeeklyHigh(symbol);
-
         result.set버전(VERSION.toUpperCase());
         result.set섹터(sector);
         if(StringUtil.isStringEmpty(result.get결과메시지())) result.set결과메시지("정상 처리되었습니다.");
@@ -794,7 +785,6 @@ public class US_StockCalLegacyService {
         result.set목표매도가(목표매도가);
         result.set현재가격(StringUtil.defaultString(companyProfile.getPrice()));
         result.set확인시간(DateUtil.getToday("yyyy-MM-dd HH:mm:ss"));
-        result.set예측데이터(predictionResponseDto);
         helper.setRstDetailContextData(resultDetail);
 
         result.set상세정보(resultDetail);

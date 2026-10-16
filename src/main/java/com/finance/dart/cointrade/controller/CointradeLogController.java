@@ -4,6 +4,7 @@ package com.finance.dart.cointrade.controller;
 import com.finance.dart.cointrade.dto.CointradeLogContentDto;
 import com.finance.dart.cointrade.dto.CointradeLogFileInfoDto;
 import com.finance.dart.cointrade.dto.CointradeLogFileListDto;
+import com.finance.dart.cointrade.exception.TraderLogException;
 import com.finance.dart.cointrade.service.CointradeLogService;
 import com.finance.dart.common.dto.CommonResponse;
 import com.finance.dart.common.logging.TransactionLogging;
@@ -42,7 +43,7 @@ public class CointradeLogController {
             CommonResponse<CointradeLogFileListDto> response = new CommonResponse<>(logFileList);
             response.setMessage("로그 파일 목록 조회 성공");
             return new ResponseEntity<>(response, HttpStatus.OK);
-        } catch (Exception e) {
+        } catch (TraderLogException e) {
             log.error("로그 파일 목록 조회 실패 - error: {}", e.getMessage(), e);
             CommonResponse<CointradeLogFileListDto> errorResponse = new CommonResponse<>();
             errorResponse.setMessage("로그 파일 목록 조회 실패: " + e.getMessage());
@@ -63,7 +64,7 @@ public class CointradeLogController {
             CommonResponse<CointradeLogFileInfoDto> response = new CommonResponse<>(logFileInfo);
             response.setMessage("최신 로그 파일 정보 조회 성공");
             return new ResponseEntity<>(response, HttpStatus.OK);
-        } catch (Exception e) {
+        } catch (TraderLogException e) {
             log.error("최신 로그 파일 정보 조회 실패 - error: {}", e.getMessage(), e);
             CommonResponse<CointradeLogFileInfoDto> errorResponse = new CommonResponse<>();
             errorResponse.setMessage("최신 로그 파일 정보 조회 실패: " + e.getMessage());
@@ -84,7 +85,7 @@ public class CointradeLogController {
             CommonResponse<CointradeLogContentDto> response = new CommonResponse<>(logContent);
             response.setMessage("로그 내용 조회 성공");
             return new ResponseEntity<>(response, HttpStatus.OK);
-        } catch (Exception e) {
+        } catch (TraderLogException e) {
             log.error("로그 내용 조회 실패 - filename: {}, error: {}", filename, e.getMessage(), e);
             CommonResponse<CointradeLogContentDto> errorResponse = new CommonResponse<>();
             errorResponse.setMessage("로그 내용 조회 실패: " + e.getMessage());
@@ -108,8 +109,8 @@ public class CointradeLogController {
             CommonResponse<CointradeLogContentDto> response = new CommonResponse<>(logContent);
             response.setMessage("최신 로그 조회 성공");
             return new ResponseEntity<>(response, HttpStatus.OK);
-        } catch (Exception e) {
-            log.error("최신 로그 조회 실패 - lastLine: {}, initialLines, error: {}", lastLine, initialLines, e.getMessage(), e);
+        } catch (TraderLogException e) {
+            log.error("최신 로그 조회 실패 - lastLine: {}, initialLines: {}, error: {}", lastLine, initialLines, e.getMessage(), e);
             CommonResponse<CointradeLogContentDto> errorResponse = new CommonResponse<>();
             errorResponse.setMessage("최신 로그 조회 실패: " + e.getMessage());
             return new ResponseEntity<>(errorResponse, HttpStatus.INTERNAL_SERVER_ERROR);

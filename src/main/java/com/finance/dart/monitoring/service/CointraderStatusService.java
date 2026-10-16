@@ -18,8 +18,7 @@ import java.util.Map;
 
 /**
  * 전체 서비스 헬스체크
- * - cointrader: HTTP /api/health, /api/process/status
- * - stock-predictor (ML): HTTP /
+ * - trader(자동매매 trader-service): HTTP /api/health, /api/process/status
  * - comp-value-admin (Web): HTTP /
  * - PostgreSQL: JDBC connection test
  * - Redis: ping
@@ -29,35 +28,32 @@ import java.util.Map;
 public class CointraderStatusService {
 
     private final WebClient webClient;
-    private final String cointraderUrl;
-    private final String stockPredictorUrl;
+    private final String traderUrl;
     private final String webUrl;
     private final DataSource dataSource;
     private final RedisConnectionFactory redisConnectionFactory;
 
     public CointraderStatusService(
             WebClient webClient,
-            @Value("${monitoring.cointrader.url:http://localhost:18082}") String cointraderUrl,
-            @Value("${monitoring.stock-predictor.url:http://localhost:18081}") String stockPredictorUrl,
+            @Value("${monitoring.trader.url:http://localhost:18082}") String traderUrl,
             @Value("${monitoring.web.url:http://localhost:80}") String webUrl,
             DataSource dataSource,
             RedisConnectionFactory redisConnectionFactory
     ) {
         this.webClient = webClient;
-        this.cointraderUrl = cointraderUrl;
-        this.stockPredictorUrl = stockPredictorUrl;
+        this.traderUrl = traderUrl;
         this.webUrl = webUrl;
         this.dataSource = dataSource;
         this.redisConnectionFactory = redisConnectionFactory;
     }
 
-    // === Cointrader ===
+    // === Trader (자동매매) ===
 
     @SuppressWarnings("unchecked")
-    public ServiceStatusDto getCointraderHealth() {
+    public ServiceStatusDto getTraderHealth() {
         try {
             Map<String, Object> response = webClient.get()
-                    .uri(cointraderUrl + "/api/health")
+                    .uri(traderUrl + "/api/health")
                     .retrieve()
                     .bodyToMono(Map.class)
                     .timeout(Duration.ofSeconds(3))
@@ -69,24 +65,24 @@ public class CointraderStatusService {
                 String version = String.valueOf(response.getOrDefault("version", ""));
 
                 return ServiceStatusDto.builder()
-                        .name("cointrader")
+                        .name("trader")
                         .status("ok".equalsIgnoreCase(status) || "healthy".equalsIgnoreCase(status) ? "UP" : "DEGRADED")
                         .uptime(uptime)
                         .version(version)
                         .build();
             }
         } catch (Exception e) {
-            log.debug("cointrader 헬스체크 실패: {}", e.getMessage());
+            log.debug("trader 헬스체크 실패: {}", e.getMessage());
         }
 
-        return ServiceStatusDto.builder().name("cointrader").status("DOWN").build();
+        return ServiceStatusDto.builder().name("trader").status("DOWN").build();
     }
 
     @SuppressWarnings("unchecked")
     public ProcessStatusDto getProcessStatus(String processName) {
         try {
             Map<String, Object> response = webClient.get()
-                    .uri(cointraderUrl + "/api/process/status")
+                    .uri(traderUrl + "/api/process/status")
                     .retrieve()
                     .bodyToMono(Map.class)
                     .timeout(Duration.ofSeconds(3))
@@ -104,35 +100,10 @@ public class CointraderStatusService {
                 }
             }
         } catch (Exception e) {
-            log.debug("cointrader 프로세스 상태 조회 실패 [{}]: {}", processName, e.getMessage());
+            log.debug("trader 프로세스 상태 조회 실패 [{}]: {}", processName, e.getMessage());
         }
 
         return ProcessStatusDto.builder().name(processName).status("IDLE").percent(0).message("").build();
-    }
-
-    // === Stock Predictor (ML) ===
-
-    public ServiceStatusDto getStockPredictorHealth() {
-        try {
-            // ML 서비스에는 / 경로가 없으므로 /logs 사용 (가볍고 항상 200 반환)
-            // 4xx/5xx도 서비스가 살아있다는 뜻이므로 onStatus로 에러 무시
-            String response = webClient.get()
-                    .uri(stockPredictorUrl + "/logs")
-                    .retrieve()
-                    .onStatus(HttpStatusCode::isError, resp -> Mono.empty())
-                    .bodyToMono(String.class)
-                    .timeout(Duration.ofSeconds(3))
-                    .block();
-
-            // response가 null이 아니면 서비스가 응답한 것 → UP
-            if (response != null) {
-                return ServiceStatusDto.builder().name("stock-predictor").status("UP").build();
-            }
-        } catch (Exception e) {
-            log.debug("stock-predictor 헬스체크 실패: {}", e.getMessage());
-        }
-
-        return ServiceStatusDto.builder().name("stock-predictor").status("DOWN").build();
     }
 
     // === Web (Nginx / Vite dev) ===
