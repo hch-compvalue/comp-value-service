@@ -1,5 +1,6 @@
 package com.finance.dart.api.common.service;
 
+import com.finance.dart.api.common.constants.PriceRangeConst;
 import com.finance.dart.api.abroad.dto.fmp.chart.StockPriceVolumeResDto;
 import com.finance.dart.api.abroad.dto.fmp.quote.StockQuoteResDto;
 import com.finance.dart.api.common.dto.CompanySharePriceResultDetail;
@@ -437,6 +438,13 @@ public class TechnicalAnalysisService {
                     .description(desc.toString())
                     .shortTermTrend(shortTermTrend)
                     .trendDetail(trendDetailSb.toString())
+                    .rangeDays(PriceRangeConst.RANGE_DAYS)
+                    .rangeAtrMultiple(PriceRangeConst.RANGE_ATR_MULTIPLE)
+                    .rangeLow(round2(Math.max(0, currentPrice - PriceRangeConst.RANGE_ATR_MULTIPLE * atr)))
+                    .rangeHigh(round2(currentPrice + PriceRangeConst.RANGE_ATR_MULTIPLE * atr))
+                    .rangeBreakDownProb(PriceRangeConst.rangeProb().down())
+                    .rangeBreakUpProb(PriceRangeConst.rangeProb().up())
+                    .rangeProbTable(PriceRangeConst.BREAK_PROB_TABLE)
                     .estimatedSupport(round2(bollingerLower))
                     .estimatedResistance(round2(bollingerUpper))
                     .sma5(round2(sma5))

@@ -1,7 +1,10 @@
 package com.finance.dart.api.common.dto.evaluation;
 
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
+import com.finance.dart.api.common.constants.PriceRangeConst;
 import lombok.*;
+
+import java.util.List;
 
 /**
  * 진입 타이밍 분석 결과 DTO
@@ -16,6 +19,7 @@ import lombok.*;
 @JsonPropertyOrder({
     "signal", "signalColor", "timingScore", "description",
     "shortTermTrend", "trendDetail",
+    "rangeDays", "rangeAtrMultiple", "rangeLow", "rangeHigh", "rangeBreakDownProb", "rangeBreakUpProb", "rangeProbTable",
     "estimatedSupport", "estimatedResistance",
     "sma5", "sma20", "macdLine", "macdSignal", "macdHistogram",
     "bollingerUpper", "bollingerMiddle", "bollingerLower",
@@ -41,10 +45,35 @@ public class EntryTimingAnalysis {
     /** 추세 상세 설명 */
     private String trendDetail;
 
-    /** 예상 지지선 (볼린저밴드 하단 기반) */
+    /** 예상 변동 범위 기간 (거래일) */
+    private int rangeDays;
+
+    /** 예상 변동 범위 ATR 배수 (현재가 ± 배수×ATR) */
+    private double rangeAtrMultiple;
+
+    /** 예상 변동 범위 하단 */
+    private double rangeLow;
+
+    /** 예상 변동 범위 상단 */
+    private double rangeHigh;
+
+    /** 기간 내 하단 아래로 종가 이탈 확률 (과거 통계) */
+    private double rangeBreakDownProb;
+
+    /** 기간 내 상단 위로 종가 돌파 확률 (과거 통계) */
+    private double rangeBreakUpProb;
+
+    /** ATR 거리별 이탈·돌파 확률표 (PriceRangeConst) */
+    private List<PriceRangeConst.BreakProb> rangeProbTable;
+
+    /**
+     * @deprecated 2026-10-19 검증에서 지지선으로서 근거 없음(볼린저밴드 하단과 동일). 화면은 rangeLow 사용. 구 클라이언트 호환용
+     */
+    @Deprecated
     private double estimatedSupport;
 
-    /** 예상 저항선 (볼린저밴드 상단 기반) */
+    /** @deprecated 볼린저밴드 상단과 동일. 화면은 rangeHigh 사용. 구 클라이언트 호환용 */
+    @Deprecated
     private double estimatedResistance;
 
     /** SMA 5일 */
