@@ -10,6 +10,7 @@ import com.finance.dart.api.abroad.service.fmp.AfterTradeService;
 import com.finance.dart.api.abroad.service.fmp.CompanyProfileSearchService;
 import com.finance.dart.api.abroad.service.fmp.ForexQuoteService;
 import com.finance.dart.api.abroad.service.fmp.StockQuoteService;
+import com.finance.dart.api.abroad.service.US_StockCalFromFpmService;
 import com.finance.dart.board.dto.TranRecordCurValueResDto;
 import com.finance.dart.board.dto.TranRecordDto;
 import com.finance.dart.board.dto.TranRecordFxRateResDto;
@@ -21,6 +22,7 @@ import com.finance.dart.common.component.RedisComponent;
 import com.finance.dart.common.component.RedisKeyGenerator;
 import com.finance.dart.common.util.ConvertUtil;
 import com.finance.dart.common.util.DateUtil;
+import com.finance.dart.common.exception.BizException;
 import com.finance.dart.common.util.StringUtil;
 import com.google.gson.Gson;
 import com.finance.dart.member.dto.Member;
@@ -51,6 +53,7 @@ public class TranRecordService {
     private final ForexQuoteService forexQuoteService;                          // 외환시세 조회 서비스
     private final StockQuoteService stockQuoteService;                          // 주식시세조회(간소화)
     private final AfterTradeService afterTradeService;                          // 애프터마켓 시세 조회 서비스
+    private final US_StockCalFromFpmService usStockCalFromFpmService;           // 해외기업 주당가치 계산 서비스
 
     private final Gson gson = new Gson();
 
@@ -109,19 +112,16 @@ public class TranRecordService {
         if(updateDto.getRmk() != null) data.setRmk(updateDto.getRmk());
         data.setUpdatedAt(LocalDateTime.now());
 
+        // 동기화 ON이면 Redis 목표매도가를 DB에도 저장 (캐시 만료 시 마지막 동기화 값 표시용)
+        boolean sync = Boolean.TRUE.equals(data.getTargetPriceSync());
+        Double sellTarget = sync ? getSellTargetPrices(Set.of(data.getSymbol())).get(data.getSymbol()) : null;
+        if(sellTarget != null) data.setTargetPrice(sellTarget);
+
         TranRecordEntity savedEntity = tranRecordRepository.save(data);
 
         // Entity -> DTO 변환하여 반환
         TranRecordDto resultDto = ConvertUtil.parseObject(savedEntity, TranRecordDto.class);
-
-        // 동기화 ON이면 Redis에서 목표매도가를 조회하여 응답 DTO에 세팅
-        if(Boolean.TRUE.equals(savedEntity.getTargetPriceSync())) {
-            Map<String, Double> sellTargetMap = getSellTargetPrices(Set.of(savedEntity.getSymbol()));
-            Double sellTarget = sellTargetMap.get(savedEntity.getSymbol());
-            if(sellTarget != null && sellTarget > 0) {
-                resultDto.setTargetPrice(sellTarget);
-            }
-        }
+        if(sync) resultDto.setTargetPriceCached(sellTarget != null);
 
         return resultDto;
     }
@@ -185,22 +185,65 @@ public class TranRecordService {
         Map<String, Double> sellTargetMap = getSellTargetPrices(syncSymbols);
 
         // 현재가 + 목표매도가 동기화 세팅
+        List<TranRecordEntity> syncedEntityList = new ArrayList<>();
         for(TranRecordEntity tranRecordEntity : tranRecordEntityList) {
             TranRecordDto tranRecordDto = ConvertUtil.parseObject(tranRecordEntity, TranRecordDto.class);
             tranRecordDto.setCurrentPrice(tickerValueMap.getOrDefault(tranRecordDto.getSymbol(), 0.0));
 
-            // 동기화 ON인 종목: Redis에서 조회된 목표매도가로 덮어쓰기
+            // 동기화 ON인 종목: Redis에서 조회된 목표매도가로 덮어쓰기 (캐시 없으면 DB의 마지막 동기화 값 유지)
             if(Boolean.TRUE.equals(tranRecordDto.getTargetPriceSync())) {
                 Double sellTarget = sellTargetMap.get(tranRecordDto.getSymbol());
-                if(sellTarget != null && sellTarget > 0) {
+                tranRecordDto.setTargetPriceCached(sellTarget != null);
+                if(sellTarget != null) {
                     tranRecordDto.setTargetPrice(sellTarget);
+                    if(!sellTarget.equals(tranRecordEntity.getTargetPrice())) {
+                        tranRecordEntity.setTargetPrice(sellTarget);
+                        syncedEntityList.add(tranRecordEntity);
+                    }
                 }
             }
 
             tranRecordDtoList.add(tranRecordDto);
         }
 
+        // 바뀐 동기화 목표가만 DB 저장
+        if(!syncedEntityList.isEmpty()) tranRecordRepository.saveAll(syncedEntityList);
+
         return tranRecordDtoList;
+    }
+
+    /**
+     * 동기화 목표매도가 재계산 (캐시 만료 종목 상세 모달 진입 시)
+     * - 최신 버전 주당가치 계산(Redis 캐시 재생성) 후 회원의 동기화 ON 거래기록 DB 목표가 갱신
+     * @param request
+     * @param symbol
+     * @return symbol, targetPrice(계산 실패 시 null), targetPriceCached
+     */
+    public TranRecordDto syncTargetPrice(HttpServletRequest request, String symbol) throws Exception {
+
+        if(StringUtil.isStringEmpty(symbol)) throw new BizException("티커 정보가 존재하지 않습니다.");
+
+        Member member = memberService.getLoginMember(request);
+
+        Double sellTarget = parseSellTarget(usStockCalFromFpmService.calPerValue(symbol));
+
+        TranRecordDto resultDto = new TranRecordDto();
+        resultDto.setSymbol(symbol);
+        resultDto.setTargetPrice(sellTarget);
+        resultDto.setTargetPriceCached(sellTarget != null);
+        if(sellTarget == null) return resultDto;
+
+        List<TranRecordEntity> syncedEntityList = new ArrayList<>();
+        for(TranRecordEntity entity : tranRecordRepository.findByMember_Id(member.getId())) {
+            if(symbol.equals(entity.getSymbol()) && Boolean.TRUE.equals(entity.getTargetPriceSync())
+                    && !sellTarget.equals(entity.getTargetPrice())) {
+                entity.setTargetPrice(sellTarget);
+                syncedEntityList.add(entity);
+            }
+        }
+        tranRecordRepository.saveAll(syncedEntityList);
+
+        return resultDto;
     }
 
     /**
@@ -326,7 +369,7 @@ public class TranRecordService {
 
     /**
      * Redis에서 심볼별 목표매도가 조회
-     * Redis 키: compvalue:abroad:calvalue:v8:{symbol}
+     * Redis 키: compvalue:abroad:calvalue:{CAL_VALUE_VERSION}:{symbol}
      * @param symbols 조회할 심볼 셋
      * @return 심볼별 목표매도가 맵
      */
@@ -339,11 +382,8 @@ public class TranRecordService {
                 String redisKey = RedisKeyGenerator.genAbroadCompValueRstData(symbol, EvaluationConst.CAL_VALUE_VERSION);
                 String cachedData = redisComponent.getValue(redisKey);
                 if(!StringUtil.isStringEmpty(cachedData)) {
-                    CompanySharePriceResult priceResult = gson.fromJson(cachedData, CompanySharePriceResult.class);
-                    String sellTarget = priceResult.get목표매도가();
-                    if(!StringUtil.isStringEmpty(sellTarget)) {
-                        result.put(symbol, Double.parseDouble(sellTarget));
-                    }
+                    Double sellTarget = parseSellTarget(gson.fromJson(cachedData, CompanySharePriceResult.class));
+                    if(sellTarget != null) result.put(symbol, sellTarget);
                 }
             } catch (Exception e) {
                 log.warn("심볼 {} 목표매도가 Redis 조회 실패: {}", symbol, e.getMessage());
@@ -351,6 +391,21 @@ public class TranRecordService {
         }
 
         return result;
+    }
+
+    /**
+     * 주당가치 계산 결과에서 목표매도가 추출
+     * @return 양수 목표매도가, 없거나 0 이하면 null
+     */
+    private Double parseSellTarget(CompanySharePriceResult priceResult) {
+        if(priceResult == null || StringUtil.isStringEmpty(priceResult.get목표매도가())) return null;
+        try {
+            double sellTarget = Double.parseDouble(priceResult.get목표매도가());
+            return sellTarget > 0 ? sellTarget : null;
+        } catch (NumberFormatException e) {
+            log.warn("심볼 {} 목표매도가 형식 오류: {}", priceResult.get기업심볼(), priceResult.get목표매도가());
+            return null;
+        }
     }
 
     /**

@@ -84,6 +84,22 @@ public class TranRecordController {
     }
 
     /**
+     * 동기화 목표매도가 재계산 (캐시 만료 종목)
+     * @param request
+     * @param reqBody symbol
+     * @return
+     */
+    @TransactionLogging
+    @PostMapping("/sync-target")
+    public ResponseEntity<CommonResponse<TranRecordDto>> syncTargetPrice(HttpServletRequest request, @RequestBody TranRecordDto reqBody)
+            throws Exception {
+
+        TranRecordDto response = tranRecordService.syncTargetPrice(request, reqBody.getSymbol());
+
+        return new ResponseEntity<>(new CommonResponse<>(response), HttpStatus.OK);
+    }
+
+    /**
      * 티커 당 현재가격 조회
      * @param reqBody
      * @return

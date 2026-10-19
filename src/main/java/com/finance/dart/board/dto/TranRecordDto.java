@@ -19,6 +19,7 @@ public class TranRecordDto {
     private Double currentPrice;    // 현재가
     private Double targetPrice;     // 매도목표가
     private Boolean targetPriceSync;// 목표가 동기화 (true: 계산된 목표매도가 자동 적용)
+    private Boolean targetPriceCached; // 동기화 목표가 캐시 적중 여부 (false: DB의 마지막 동기화 값, 상세 모달에서 재계산)
 
     private Double buyExchangeRateAtTrade;  // 매수체결당시 환율
 
