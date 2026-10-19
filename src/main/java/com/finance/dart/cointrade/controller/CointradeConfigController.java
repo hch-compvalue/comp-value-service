@@ -38,7 +38,7 @@ public class CointradeConfigController {
     /**
      * 거래 기록 조회 (페이징)
      * GET /api/cointrade/history
-     * Query Params: startDate, endDate, coinCode, tradeType, page, size
+     * Query Params: startDate, endDate, coinCode, tradeType, market(CRYPTO|KRX), includeLegacy(기본 false = 현재 전략 기록만), page, size
      */
     @EndPointConfig.RequireRole({RoleConstants.ROLE_SUPER_ADMIN})
     @TransactionLogging
@@ -48,13 +48,15 @@ public class CointradeConfigController {
             @RequestParam(required = false, name = "endDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate,
             @RequestParam(required = false, name = "coinCode") String coinCode,
             @RequestParam(required = false, name = "tradeType") String tradeType,
+            @RequestParam(required = false, name = "market") String market,
+            @RequestParam(defaultValue = "false", name = "includeLegacy") boolean includeLegacy,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
 
-        log.info("거래 기록 조회 요청 - startDate: {}, endDate: {}, coinCode: {}, tradeType: {}, page: {}",
-                startDate, endDate, coinCode, tradeType, pageable.getPageNumber());
+        log.info("거래 기록 조회 요청 - startDate: {}, endDate: {}, coinCode: {}, tradeType: {}, market: {}, includeLegacy: {}, page: {}",
+                startDate, endDate, coinCode, tradeType, market, includeLegacy, pageable.getPageNumber());
 
         Page<CointradeTradeHistoryDto> history = cointradeConfigService.getTradeHistory(
-                startDate, endDate, coinCode, tradeType, pageable);
+                startDate, endDate, coinCode, tradeType, market, includeLegacy, pageable);
 
         return new ResponseEntity<>(new CommonResponse<>(history), HttpStatus.OK);
     }

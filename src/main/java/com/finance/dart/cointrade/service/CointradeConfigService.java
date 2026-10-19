@@ -1,5 +1,6 @@
 package com.finance.dart.cointrade.service;
 
+import com.finance.dart.cointrade.consts.CoinTraderProgramConfig;
 import com.finance.dart.cointrade.dto.CointradeTradeHistoryDto;
 import com.finance.dart.cointrade.entity.CointradeTradeHistoryEntity;
 import com.finance.dart.cointrade.repository.CointradeTradeHistoryRepository;
@@ -36,6 +37,8 @@ public class CointradeConfigService {
             LocalDateTime endDate,
             String coinCode,
             String tradeType,
+            String market,
+            boolean includeLegacy,
             Pageable pageable) {
 
         // 종목·매매구분·기간 조건을 있는 것만 조합 (정렬은 pageable, 기본 createdAt DESC)
@@ -45,6 +48,12 @@ public class CointradeConfigService {
             if (tradeType != null && !tradeType.isBlank()) conditions.add(cb.equal(root.get("tradeType"), tradeType));
             if (startDate != null) conditions.add(cb.greaterThanOrEqualTo(root.get("createdAt"), startDate));
             if (endDate != null) conditions.add(cb.lessThanOrEqualTo(root.get("createdAt"), endDate));
+            // 시장: 코인 = KRW-xxx, 국내주식 = 그 외(6자리 종목코드)
+            Predicate crypto = cb.like(root.get("coinCode"), CoinTraderProgramConfig.CRYPTO_CODE_PREFIX + "%");
+            if (CoinTraderProgramConfig.MARKET_CRYPTO.equalsIgnoreCase(market)) conditions.add(crypto);
+            else if (CoinTraderProgramConfig.MARKET_KRX.equalsIgnoreCase(market)) conditions.add(cb.not(crypto));
+            // 기본은 현재 전략 기록만 (구 v4 단타 기록은 includeLegacy=true일 때 포함)
+            if (!includeLegacy) conditions.add(root.get("reason").in(CoinTraderProgramConfig.STRATEGY_TRADE_REASONS));
             return cb.and(conditions.toArray(new Predicate[0]));
         };
         Page<CointradeTradeHistoryEntity> entities = tradeHistoryRepository.findAll(spec, pageable);

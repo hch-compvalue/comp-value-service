@@ -1,5 +1,7 @@
 package com.finance.dart.cointrade.consts;
 
+import java.util.List;
+
 /**
  * <pre>
  * 머신러닝 코인자동매매 프로그램 설정
@@ -12,6 +14,16 @@ public class CoinTraderProgramConfig {
     public static final String localHost = "http://localhost:18082";
     public static final String prodHost = "http://trader-service";
 
+
+    // 거래기록 구분
+    /** 시장 구분: 코인 (종목코드 KRW-xxx) **/
+    public static final String MARKET_CRYPTO = "CRYPTO";
+    /** 시장 구분: 국내주식 (종목코드 6자리) **/
+    public static final String MARKET_KRX = "KRX";
+    /** 코인 종목코드 접두사 (업비트 원화마켓) **/
+    public static final String CRYPTO_CODE_PREFIX = "KRW-";
+    /** 현재 전략(v5 이후) 거래 사유 — 그 외 사유는 구 전략(v4 단타) 기록 **/
+    public static final List<String> STRATEGY_TRADE_REASONS = List.of("TREND_REBALANCE", "EMERGENCY_EXIT");
 
     // API
 
