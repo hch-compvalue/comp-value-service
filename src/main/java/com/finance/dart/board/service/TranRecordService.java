@@ -54,6 +54,7 @@ public class TranRecordService {
     private final StockQuoteService stockQuoteService;                          // 주식시세조회(간소화)
     private final AfterTradeService afterTradeService;                          // 애프터마켓 시세 조회 서비스
     private final US_StockCalFromFpmService usStockCalFromFpmService;           // 해외기업 주당가치 계산 서비스
+    private final SymbolMemoService symbolMemoService;                          // 종목 메모 서비스
 
     private final Gson gson = new Gson();
 
@@ -93,12 +94,14 @@ public class TranRecordService {
         // 로그인 회원 정보
         MemberEntity memberEntity = getMemberEntity(request);
 
-        // 데이터 조회
+        // 데이터 조회 (본인 기록만)
         Optional<TranRecordEntity> dataOpt = tranRecordRepository.findById(updateDto.getId());
         if(dataOpt.isEmpty()) return null;
 
         // 데이터 수정
         TranRecordEntity data = dataOpt.get();
+        checkOwner(data, memberEntity.getId());
+        String oldSymbol = data.getSymbol();
         data.setMember(memberEntity);
 
         if(updateDto.getSymbol() != null) data.setSymbol(updateDto.getSymbol());
@@ -119,6 +122,9 @@ public class TranRecordService {
 
         TranRecordEntity savedEntity = tranRecordRepository.save(data);
 
+        // 티커 변경 시 종목 메모 이동/정리
+        symbolMemoService.handleSymbolChange(memberEntity.getId(), oldSymbol, savedEntity.getSymbol());
+
         // Entity -> DTO 변환하여 반환
         TranRecordDto resultDto = ConvertUtil.parseObject(savedEntity, TranRecordDto.class);
         if(sync) resultDto.setTargetPriceCached(sellTarget != null);
@@ -127,14 +133,31 @@ public class TranRecordService {
     }
 
     /**
-     * 거래기록 삭제
+     * 거래기록 삭제 (본인 기록만, 해당 심볼 보유분이 모두 없어지면 종목 메모도 삭제)
+     * @param request
      * @param deleteDto
-     * @return
      */
-    public void delTranRecord(TranRecordDto deleteDto) {
+    public void delTranRecord(HttpServletRequest request, TranRecordDto deleteDto) {
 
-        if (deleteDto.getId() != null) {
-            tranRecordRepository.deleteById(deleteDto.getId());
+        if (deleteDto.getId() == null) return;
+
+        Long memberId = getMemberEntity(request).getId();
+        Optional<TranRecordEntity> dataOpt = tranRecordRepository.findById(deleteDto.getId());
+        if (dataOpt.isEmpty()) return;
+
+        TranRecordEntity data = dataOpt.get();
+        checkOwner(data, memberId);
+        tranRecordRepository.delete(data);
+
+        symbolMemoService.deleteIfNotHeld(memberId, data.getSymbol());
+    }
+
+    /**
+     * 본인 거래기록인지 확인
+     */
+    private void checkOwner(TranRecordEntity entity, Long memberId) {
+        if (entity.getMember() == null || !entity.getMember().getId().equals(memberId)) {
+            throw new BizException("본인 거래기록만 수정/삭제할 수 있습니다.");
         }
     }
 

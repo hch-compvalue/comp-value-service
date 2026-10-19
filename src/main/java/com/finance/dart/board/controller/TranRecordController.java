@@ -1,6 +1,7 @@
 package com.finance.dart.board.controller;
 
 import com.finance.dart.board.dto.*;
+import com.finance.dart.board.service.SymbolMemoService;
 import com.finance.dart.board.service.TranRecordService;
 import com.finance.dart.common.dto.CommonResponse;
 import com.finance.dart.common.logging.TransactionLogging;
@@ -23,6 +24,7 @@ import java.util.stream.Collectors;
 public class TranRecordController {
 
     private final TranRecordService tranRecordService;
+    private final SymbolMemoService symbolMemoService;
 
 
     /**
@@ -61,9 +63,9 @@ public class TranRecordController {
      */
     @TransactionLogging
     @PostMapping("/del")
-    public ResponseEntity<CommonResponse<Void>> delTranRecord(@RequestBody TranRecordDto reqBody) {
+    public ResponseEntity<CommonResponse<Void>> delTranRecord(HttpServletRequest request, @RequestBody TranRecordDto reqBody) {
 
-        tranRecordService.delTranRecord(reqBody);
+        tranRecordService.delTranRecord(request, reqBody);
 
         return new ResponseEntity<>(new CommonResponse<>(), HttpStatus.OK);
     }
@@ -95,6 +97,35 @@ public class TranRecordController {
             throws Exception {
 
         TranRecordDto response = tranRecordService.syncTargetPrice(request, reqBody.getSymbol());
+
+        return new ResponseEntity<>(new CommonResponse<>(response), HttpStatus.OK);
+    }
+
+    /**
+     * 종목 메모 목록 조회 (로그인 회원)
+     * @param request
+     * @return
+     */
+    @TransactionLogging
+    @GetMapping("/memo")
+    public ResponseEntity<CommonResponse<List<SymbolMemoDto>>> getSymbolMemoList(HttpServletRequest request) {
+
+        List<SymbolMemoDto> response = symbolMemoService.getMemoList(request);
+
+        return new ResponseEntity<>(new CommonResponse<>(response), HttpStatus.OK);
+    }
+
+    /**
+     * 종목 메모 저장 (빈 메모 = 삭제)
+     * @param request
+     * @param reqBody symbol, memo
+     * @return
+     */
+    @TransactionLogging
+    @PostMapping("/memo")
+    public ResponseEntity<CommonResponse<SymbolMemoDto>> saveSymbolMemo(HttpServletRequest request, @RequestBody SymbolMemoDto reqBody) {
+
+        SymbolMemoDto response = symbolMemoService.saveMemo(request, reqBody);
 
         return new ResponseEntity<>(new CommonResponse<>(response), HttpStatus.OK);
     }

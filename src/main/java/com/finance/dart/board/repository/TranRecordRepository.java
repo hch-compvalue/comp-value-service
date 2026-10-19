@@ -17,4 +17,9 @@ public interface TranRecordRepository extends JpaRepository<TranRecordEntity, Lo
      */
     List<TranRecordEntity> findByMember_Id(Long memberId);
 
+    /**
+     * 회원이 해당 심볼을 보유 중인지 (매수 건 1건 이상)
+     */
+    boolean existsByMember_IdAndSymbol(Long memberId, String symbol);
+
 }
