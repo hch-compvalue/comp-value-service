@@ -40,6 +40,11 @@ public class CointradeStrategyService {
         return call(CoinTraderProgramConfig.API_URI_STRATEGY_LIST, HttpMethod.GET, null);
     }
 
+    /** 코인·주식 실전 장부 합산 (총 평가금액·자산 구성·합산 추이·낙폭) */
+    public Map<String, Object> getOverview() {
+        return call(CoinTraderProgramConfig.API_URI_STRATEGY_OVERVIEW, HttpMethod.GET, null);
+    }
+
     /** 현재 모드·설정·오늘 신호·장부·계좌 대조 */
     public Map<String, Object> getStatus(String strategy) {
         return call(withStrategy(CoinTraderProgramConfig.API_URI_STRATEGY_STATUS, strategy), HttpMethod.GET, null);

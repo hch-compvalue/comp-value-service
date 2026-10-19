@@ -34,6 +34,13 @@ public class CointradeStrategyController {
         return new ResponseEntity<>(new CommonResponse<>(strategyService.getStrategies()), HttpStatus.OK);
     }
 
+    /** GET /api/cointrade/strategy/overview  (전체 자산: 코인·주식 실전 장부 합산) */
+    @EndPointConfig.RequireRole({RoleConstants.ROLE_SUPER_ADMIN})
+    @GetMapping("/overview")
+    public ResponseEntity<CommonResponse<Map<String, Object>>> getOverview() {
+        return new ResponseEntity<>(new CommonResponse<>(strategyService.getOverview()), HttpStatus.OK);
+    }
+
     /** GET /api/cointrade/strategy/status?strategy=btc_trend */
     @EndPointConfig.RequireRole({RoleConstants.ROLE_SUPER_ADMIN})
     @GetMapping("/status")

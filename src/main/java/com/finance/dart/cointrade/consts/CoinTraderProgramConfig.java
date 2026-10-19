@@ -33,6 +33,9 @@ public class CoinTraderProgramConfig {
     /** 전략 ID 허용 형식 (URL 쿼리에 그대로 붙이므로 검증) **/
     public static final String STRATEGY_ID_PATTERN = "^[a-z0-9_]{1,30}$";
 
+    /** [v5.1 전략] 코인·주식 실전 장부 합산 (전체 자산 화면) **/
+    public static final String API_URI_STRATEGY_OVERVIEW = "api/strategy/overview";
+
     /** [v5.1 전략] 등록 전략(프리셋) 목록 **/
     public static final String API_URI_STRATEGY_LIST = "api/strategy/list";
 
