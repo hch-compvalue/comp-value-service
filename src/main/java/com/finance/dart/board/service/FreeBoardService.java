@@ -82,8 +82,9 @@ public class FreeBoardService {
     }
 
     /**
-     * 게시글 생성
+     * 게시글 생성 — 첨부 검증 실패 시 게시글도 저장하지 않음 (첨부 저장 실패 시 함께 롤백)
      */
+    @Transactional
     public FreeBoardDto createBoard(HttpServletRequest request, FreeBoardDto boardDto, List<MultipartFile> files) {
         // 로그인 회원 정보
         Member member = memberService.getLoginMember(request);
@@ -93,6 +94,9 @@ public class FreeBoardService {
 
         // 이미지 크기 검증
         ImageSizeValidator.validateImageSize(boardDto.getContent());
+
+        // 첨부파일 검증 (게시글 저장 전)
+        attachmentService.validateFiles(0, files);
 
         // 공지글 작성 권한 체크 (관리자만 가능)
         if (boardDto.isNotice()) {
@@ -256,9 +260,12 @@ public class FreeBoardService {
             }
         }
 
+        // 새 첨부파일 검증 (기존 첨부 삭제·게시글 수정 전)
+        attachmentService.validateFiles(attachmentService.countRemainingAttachments(id, deleteAttachmentIds), files);
+
         // 삭제 대상 첨부파일 처리
         if (deleteAttachmentIds != null && !deleteAttachmentIds.isEmpty()) {
-            attachmentService.deleteAttachmentsByIds(deleteAttachmentIds);
+            attachmentService.deleteAttachmentsByIds(id, deleteAttachmentIds);
         }
 
         // 수정
@@ -279,8 +286,9 @@ public class FreeBoardService {
     }
 
     /**
-     * 게시글 삭제
+     * 게시글 삭제 — 첨부 디스크 파일은 커밋 후 삭제
      */
+    @Transactional
     public void deleteBoard(HttpServletRequest request, Long id) {
         Optional<FreeBoard> boardOpt = freeBoardRepository.findById(id);
         FreeBoard board = boardOpt.orElseThrow(() ->

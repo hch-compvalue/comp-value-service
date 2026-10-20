@@ -9,9 +9,12 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -53,22 +56,47 @@ public class FreeBoardAttachmentService {
     );
 
     /**
+     * 새 첨부파일 일괄 검증 (개수·크기·MIME·확장자)
+     * - 게시글 저장/기존 첨부 삭제 전에 호출해, 첨부가 거부되면 게시글도 저장되지 않게 한다
+     *
+     * @param existingCount 이 요청 처리 후에도 남아 있을 기존 첨부 수
+     */
+    public void validateFiles(int existingCount, List<MultipartFile> files) {
+        if (files == null || files.isEmpty()) return;
+
+        if (existingCount + files.size() > MAX_FILE_COUNT) {
+            throw new BizException("첨부파일은 최대 " + MAX_FILE_COUNT + "개까지 가능합니다.");
+        }
+        files.forEach(this::validateFile);
+    }
+
+    /**
+     * 수정 시 삭제 대상을 뺀 남은 기존 첨부 수 (해당 게시글 첨부만 대상)
+     */
+    public int countRemainingAttachments(Long boardId, List<Long> deleteIds) {
+        List<FreeBoardAttachment> existing = attachmentRepository.findByFreeBoardId(boardId);
+        if (deleteIds == null || deleteIds.isEmpty()) return existing.size();
+        return (int) existing.stream().filter(a -> !deleteIds.contains(a.getId())).count();
+    }
+
+    /**
      * 첨부파일 저장
+     * - 트랜잭션이 롤백되면 이번 요청에서 디스크에 저장한 파일도 지운다 (고아 파일 방지)
      */
     @Transactional
     public void saveAttachments(FreeBoard board, List<MultipartFile> files) {
         if (files == null || files.isEmpty()) return;
 
-        // 기존 첨부파일 수 + 새 파일 수 체크
+        // 기존 첨부파일 수 + 새 파일 수 체크 (호출부에서 미리 검증하지만 단독 호출 대비 유지)
         int existingCount = attachmentRepository.findByFreeBoardId(board.getId()).size();
-        if (existingCount + files.size() > MAX_FILE_COUNT) {
-            throw new BizException("첨부파일은 최대 " + MAX_FILE_COUNT + "개까지 가능합니다.");
-        }
+        validateFiles(existingCount, files);
+
+        List<String> storedFilenames = new ArrayList<>();
+        deleteFilesOnRollback(storedFilenames);
 
         for (MultipartFile file : files) {
-            validateFile(file);
-
             String storedFilename = fileStorageService.storeFile(file);
+            storedFilenames.add(storedFilename);
 
             FreeBoardAttachment attachment = new FreeBoardAttachment();
             attachment.setFreeBoard(board);
@@ -108,28 +136,63 @@ public class FreeBoardAttachmentService {
 
     /**
      * 선택된 첨부파일 삭제 (수정 시)
+     * - 해당 게시글의 첨부만 삭제 (다른 게시글 첨부 id 가 넘어와도 무시)
+     * - 디스크 파일은 커밋 후 삭제 → 수정이 실패해 롤백되면 파일이 그대로 남음
      */
     @Transactional
-    public void deleteAttachmentsByIds(List<Long> ids) {
+    public void deleteAttachmentsByIds(Long boardId, List<Long> ids) {
         if (ids == null || ids.isEmpty()) return;
 
+        List<String> storedFilenames = new ArrayList<>();
         for (Long id : ids) {
-            attachmentRepository.findById(id).ifPresent(attachment -> {
-                fileStorageService.deleteFile(attachment.getStoredFilename());
-                attachmentRepository.delete(attachment);
-            });
+            attachmentRepository.findById(id)
+                    .filter(attachment -> boardId.equals(attachment.getFreeBoard().getId()))
+                    .ifPresent(attachment -> {
+                        storedFilenames.add(attachment.getStoredFilename());
+                        attachmentRepository.delete(attachment);
+                    });
         }
+        deleteFilesAfterCommit(storedFilenames);
     }
 
     /**
-     * 게시글의 모든 첨부파일 물리 삭제
+     * 게시글의 모든 첨부파일 물리 삭제 (DB 행은 게시글 cascade 로 삭제)
+     * - 디스크 파일은 커밋 후 삭제 → 게시글 삭제가 실패하면 파일이 그대로 남음
      */
     @Transactional
     public void deleteAllAttachments(Long boardId) {
-        List<FreeBoardAttachment> attachments = attachmentRepository.findByFreeBoardId(boardId);
-        for (FreeBoardAttachment attachment : attachments) {
-            fileStorageService.deleteFile(attachment.getStoredFilename());
+        List<String> storedFilenames = attachmentRepository.findByFreeBoardId(boardId).stream()
+                .map(FreeBoardAttachment::getStoredFilename)
+                .collect(Collectors.toList());
+        deleteFilesAfterCommit(storedFilenames);
+    }
+
+    /** 커밋 성공 후 디스크 파일 삭제 (트랜잭션 밖에서 호출되면 즉시 삭제) */
+    private void deleteFilesAfterCommit(List<String> storedFilenames) {
+        if (storedFilenames.isEmpty()) return;
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            storedFilenames.forEach(fileStorageService::deleteFile);
+            return;
         }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                storedFilenames.forEach(fileStorageService::deleteFile);
+            }
+        });
+    }
+
+    /** 롤백 시 디스크 파일 삭제 — 목록은 등록 후에 채워져도 됨 (롤백 시점의 목록 사용) */
+    private void deleteFilesOnRollback(List<String> storedFilenames) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) return;
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCompletion(int status) {
+                if (status == STATUS_ROLLED_BACK) {
+                    storedFilenames.forEach(fileStorageService::deleteFile);
+                }
+            }
+        });
     }
 
     /**
