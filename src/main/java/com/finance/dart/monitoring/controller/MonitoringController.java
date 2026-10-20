@@ -6,6 +6,10 @@ import com.finance.dart.member.enums.RoleConstants;
 import com.finance.dart.monitoring.buffer.MonitoringEventBuffer;
 import com.finance.dart.monitoring.dto.ApiRequestLogDto;
 import com.finance.dart.monitoring.dto.MonitoringSnapshotDto;
+import com.finance.dart.monitoring.dto.PodStatusDto;
+import com.finance.dart.monitoring.service.PodStatusService;
+import com.finance.dart.common.dto.CommonResponse;
+import org.springframework.http.ResponseEntity;
 import com.finance.dart.monitoring.dto.TradeEventDto;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +37,16 @@ public class MonitoringController {
 
     private final MonitoringEventBuffer eventBuffer;
     private final ObjectMapper objectMapper;
+    private final PodStatusService podStatusService;
+
+    /**
+     * 클러스터 전체 파드 상태 (실시간 대시보드 '파드' 탭)
+     */
+    @EndPointConfig.RequireRole({RoleConstants.ROLE_SUPER_ADMIN})
+    @GetMapping("/pods")
+    public ResponseEntity<CommonResponse<List<PodStatusDto>>> pods() {
+        return ResponseEntity.ok(new CommonResponse<>(podStatusService.getPods()));
+    }
 
     /**
      * SSE 스트림 엔드포인트

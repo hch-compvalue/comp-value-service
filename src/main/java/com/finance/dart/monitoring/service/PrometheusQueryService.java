@@ -6,10 +6,12 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.util.UriComponentsBuilder;
+import reactor.util.retry.Retry;
 
 import java.net.URI;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -21,6 +23,10 @@ import java.util.Set;
 @Slf4j
 @Service
 public class PrometheusQueryService {
+
+    private static final int QUERY_TIMEOUT_SECONDS = 5;
+    private static final int QUERY_RETRY_COUNT = 1;
+    private static final long QUERY_RETRY_BACKOFF_MS = 300;
 
     private final WebClient webClient;
     private final String prometheusUrl;
@@ -148,6 +154,53 @@ public class PrometheusQueryService {
                 .containers(containers)
                 .gpu(gpuMetric)
                 .build();
+    }
+
+    /** Prometheus 수집 사용 여부 (로컬 등 비활성 환경에서는 false) */
+    public boolean isEnabled() {
+        return enabled;
+    }
+
+    /** 라벨 묶음 + 값 한 건 */
+    public record Sample(Map<String, String> labels, double value) {
+        public String label(String key) {
+            return labels.getOrDefault(key, "");
+        }
+    }
+
+    /**
+     * instant 쿼리 결과를 라벨 전체와 함께 반환 (여러 라벨로 묶어야 하는 파드 상태 조회용)
+     * - 5초 타임아웃, 실패 시 1회 재시도
+     */
+    @SuppressWarnings("unchecked")
+    public List<Sample> querySamples(String query) {
+        URI uri = UriComponentsBuilder.fromHttpUrl(prometheusUrl)
+                .path("/api/v1/query")
+                .queryParam("query", query)
+                .build()
+                .encode()
+                .toUri();
+
+        Map<String, Object> response = webClient.get()
+                .uri(uri)
+                .retrieve()
+                .bodyToMono(Map.class)
+                .timeout(Duration.ofSeconds(QUERY_TIMEOUT_SECONDS))
+                .retryWhen(Retry.backoff(QUERY_RETRY_COUNT, Duration.ofMillis(QUERY_RETRY_BACKOFF_MS)))
+                .block();
+
+        if (response == null || !(response.get("data") instanceof Map<?, ?> data)) return List.of();
+        if (!(data.get("result") instanceof List<?> results)) return List.of();
+
+        List<Sample> samples = new ArrayList<>();
+        for (Object item : results) {
+            Map<String, Object> row = (Map<String, Object>) item;
+            Map<String, String> metric = (Map<String, String>) row.get("metric");
+            List<Object> value = (List<Object>) row.get("value");
+            if (metric == null || value == null || value.size() < 2) continue;
+            samples.add(new Sample(Collections.unmodifiableMap(metric), Double.parseDouble(String.valueOf(value.get(1)))));
+        }
+        return samples;
     }
 
     @SuppressWarnings("unchecked")
