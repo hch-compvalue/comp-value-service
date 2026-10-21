@@ -7,6 +7,13 @@ import com.finance.dart.monitoring.buffer.MonitoringEventBuffer;
 import com.finance.dart.monitoring.dto.ApiRequestLogDto;
 import com.finance.dart.monitoring.dto.MonitoringSnapshotDto;
 import com.finance.dart.monitoring.dto.PodStatusDto;
+import com.finance.dart.monitoring.dto.ExternalApiToggleReqDto;
+import com.finance.dart.monitoring.dto.ServiceStatusDto;
+import com.finance.dart.monitoring.service.ExternalApiHealthService;
+import com.finance.dart.common.exception.BizException;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import com.finance.dart.monitoring.service.PodStatusService;
 import com.finance.dart.common.dto.CommonResponse;
 import org.springframework.http.ResponseEntity;
@@ -38,6 +45,22 @@ public class MonitoringController {
     private final MonitoringEventBuffer eventBuffer;
     private final ObjectMapper objectMapper;
     private final PodStatusService podStatusService;
+    private final ExternalApiHealthService externalApiHealthService;
+
+    /**
+     * 외부 API 모니터링 사용 여부 변경 (끄면 헬스체크 호출을 멈추고 '사용 안 함'으로 표시)
+     */
+    @EndPointConfig.RequireRole({RoleConstants.ROLE_SUPER_ADMIN})
+    @TransactionLogging
+    @PutMapping("/external-apis/{apiName}")
+    public ResponseEntity<CommonResponse<ServiceStatusDto>> setExternalApiEnabled(
+            @PathVariable("apiName") String apiName,
+            @RequestBody ExternalApiToggleReqDto reqBody) {
+        if (reqBody == null || reqBody.getEnabled() == null) {
+            throw new BizException("enabled 값이 필요합니다.");
+        }
+        return ResponseEntity.ok(new CommonResponse<>(externalApiHealthService.setEnabled(apiName, reqBody.getEnabled())));
+    }
 
     /**
      * 클러스터 전체 파드 상태 (실시간 대시보드 '파드' 탭)
