@@ -80,6 +80,27 @@ public class EvaluationPerformanceService {
     static final String RANK_BOTTOM = "하위 20%";
     private static final List<String> RANK_GROUP_ORDER = List.of(RANK_TOP, RANK_MIDDLE, RANK_BOTTOM);
 
+    /**
+     * 매수 대상 그룹 — 프론트 util/BuyTargetUtil.js 와 같은 기준 (종목 발굴 기본 목록, 금융 제외 기본값)
+     * 기준일 후보 순위 상위 20% + 가치점수 ≥ 73(가치등급 B 하한, StockEvaluationService.calculateGrade) + 0 < 현재가 < 적정가 × 0.95(목표매도가)
+     */
+    static final String BUY_TARGET = "매수 대상";
+    static final String BUY_OTHERS = "그 외 후보";
+    static final String ALL_CANDIDATES = "후보 전체";
+    private static final List<String> BUY_GROUP_ORDER = List.of(BUY_TARGET, BUY_OTHERS, ALL_CANDIDATES);
+    static final double BUY_TARGET_TOP_RATIO = 0.2;
+    static final double BUY_TARGET_MIN_VALUE_SCORE = 73.0;
+    static final BigDecimal SELL_TARGET_RATIO = new BigDecimal("0.95");
+    static final String FINANCIAL_SECTOR = "Financial Services";
+
+    /** 가치등급 두 묶음 (B 이상 = 매수 대상 조건) — 등급별 중앙값은 합칠 수 없어 따로 집계 */
+    static final String VALUE_B_UP = "가치 B 이상";
+    static final String VALUE_C_DOWN = "가치 C 이하";
+    private static final List<String> VALUE_BAND_ORDER = List.of(VALUE_B_UP, VALUE_C_DOWN);
+
+    /** 한 프로파일에만 추천된 종목 그룹 접미사 (프로파일 고유 기여 확인용) */
+    static final String PROFILE_ONLY_SUFFIX = " 단독";
+
     /** 벤치마크 조회 시도 횟수 (일시적 네트워크 오류 대비) */
     private static final int BENCHMARK_FETCH_ATTEMPTS = 2;
 
@@ -97,7 +118,7 @@ public class EvaluationPerformanceService {
     /**
      * 기준일 대비 최신일까지의 수익률을 투자판정·가치등급·추천프로파일별로 집계
      * @param fromDate 기준일 (해당일에 평가된 종목들의 이후 성과)
-     * @return {"bySignal", "byGrade", "byProfile": [...], "baseDate", "latestDate", "largeMoveThresholdPct",
+     * @return {"bySignal", "byGrade", "byProfile", "byRank", "byBuyTarget", "byValueBand": [...], "baseDate", "latestDate", "largeMoveThresholdPct",
      *          "baselineCount", "unmatchedCount", "unmatchedPct", "noBasePriceCount", "profileTagged"}
      */
     @Transactional(readOnly = true)
@@ -120,6 +141,8 @@ public class EvaluationPerformanceService {
             result.put("bySignal", List.of());
             result.put("byGrade", List.of());
             result.put("byProfile", List.of());
+            result.put("byBuyTarget", List.of());
+            result.put("byValueBand", List.of());
             result.put("note", "수익률 산출에는 기준일 이후 경과한 스냅샷이 필요합니다.");
             return result;
         }
@@ -137,14 +160,62 @@ public class EvaluationPerformanceService {
         result.putAll(computeTrackingStats(baseline, latestBySymbol));
         result.put("bySignal", computeSummaries(baseline, latestBySymbol, EvaluationHistoryEntity::getInvestmentSignal, elapsedDays, benchmarkPct));
         result.put("byGrade", computeSummaries(baseline, latestBySymbol, EvaluationHistoryEntity::getValueGrade, elapsedDays, benchmarkPct));
-        // 한 종목을 여러 프로파일이 추천했으면 각 프로파일 그룹에 모두 집계 (태그 없는 종목은 제외)
-        result.put("byProfile", computeMultiGroupSummaries(baseline, latestBySymbol, EvaluationPerformanceService::parseProfiles, elapsedDays, benchmarkPct));
+        // 한 종목을 여러 프로파일이 추천했으면 각 프로파일 그룹에 모두 집계 (태그 없는 종목은 제외) + 한 프로파일에만 추천된 종목은 "단독" 그룹에도
+        result.put("byProfile", computeMultiGroupSummaries(baseline, latestBySymbol, EvaluationPerformanceService::profileGroupKeys, elapsedDays, benchmarkPct));
         // 투자 순위 상·중·하 (순위 점수 없는 10-14 이전 스냅샷이면 빈 목록) — 순위가 실제로 좋은 종목을 위로 올리는지 실전 검증
         List<PerformanceSummaryDto> byRank = new ArrayList<>(computeMultiGroupSummaries(
                 baseline, latestBySymbol, rankGroupKeys(baseline), elapsedDays, benchmarkPct));
         byRank.sort(Comparator.comparingInt(sm -> RANK_GROUP_ORDER.indexOf(sm.getGroup())));
         result.put("byRank", byRank);
+        // 매수 대상 / 그 외 후보 / 후보 전체 (순위 점수 없는 스냅샷이면 빈 목록) — 종목 발굴 기본 목록의 실전 검증
+        List<PerformanceSummaryDto> byBuyTarget = new ArrayList<>(computeMultiGroupSummaries(
+                baseline, latestBySymbol, buyTargetGroupKeys(baseline), elapsedDays, benchmarkPct));
+        byBuyTarget.sort(Comparator.comparingInt(sm -> BUY_GROUP_ORDER.indexOf(sm.getGroup())));
+        result.put("byBuyTarget", byBuyTarget);
+        List<PerformanceSummaryDto> byValueBand = new ArrayList<>(computeMultiGroupSummaries(
+                baseline, latestBySymbol, EvaluationPerformanceService::valueBandKeys, elapsedDays, benchmarkPct));
+        byValueBand.sort(Comparator.comparingInt(sm -> VALUE_BAND_ORDER.indexOf(sm.getGroup())));
+        result.put("byValueBand", byValueBand);
         return result;
+    }
+
+    /** 가치점수 73 이상 / 미만 (점수 없으면 제외) */
+    static List<String> valueBandKeys(EvaluationHistoryEntity e) {
+        Double v = e.getValueScore();
+        if (v == null) return List.of();
+        return List.of(v >= BUY_TARGET_MIN_VALUE_SCORE ? VALUE_B_UP : VALUE_C_DOWN);
+    }
+
+    /**
+     * 매수 대상 그룹 키 함수 — 매수 대상이면 [매수 대상, 후보 전체], 아니면 [그 외 후보, 후보 전체]
+     * - 순위 상위 20%는 순위 점수 있는 종목 수 × 0.2 (반올림) 개, 점수 내림차순 (프론트 topRankSymbols 와 동일)
+     * - 기준일에 순위 점수가 하나도 없으면 어느 그룹에도 넣지 않음 (10-14 이전 스냅샷)
+     */
+    static Function<EvaluationHistoryEntity, List<String>> buyTargetGroupKeys(List<EvaluationHistoryEntity> baseline) {
+        List<EvaluationHistoryEntity> ranked = baseline.stream().filter(e -> e.getRankScore() != null)
+                .sorted(Comparator.comparing(EvaluationHistoryEntity::getRankScore).reversed()).toList();
+        if (ranked.isEmpty()) return e -> List.of();
+        Set<String> top = new HashSet<>();
+        ranked.subList(0, (int) Math.round(ranked.size() * BUY_TARGET_TOP_RATIO)).forEach(e -> top.add(e.getSymbol()));
+        return e -> List.of(isBuyTarget(e, top) ? BUY_TARGET : BUY_OTHERS, ALL_CANDIDATES);
+    }
+
+    /** 매수 대상 조건 (순위 상위 20% · 가치 B 이상 · 목표매도가 미도달 · 금융 제외) */
+    static boolean isBuyTarget(EvaluationHistoryEntity e, Set<String> topSymbols) {
+        BigDecimal fair = e.getFairValue();
+        BigDecimal price = e.getCurrentPrice();
+        return topSymbols.contains(e.getSymbol())
+                && e.getValueScore() != null && e.getValueScore() >= BUY_TARGET_MIN_VALUE_SCORE
+                && isPositive(fair) && isPositive(price)
+                && price.compareTo(fair.multiply(SELL_TARGET_RATIO)) < 0
+                && !FINANCIAL_SECTOR.equals(e.getSector());
+    }
+
+    /** 프로파일 그룹 키 — 태그 전부 + 태그가 하나뿐이면 "<프로파일> 단독" */
+    static List<String> profileGroupKeys(EvaluationHistoryEntity e) {
+        List<String> tags = parseProfiles(e);
+        if (tags.size() != 1) return tags;
+        return List.of(tags.get(0), tags.get(0) + PROFILE_ONLY_SUFFIX);
     }
 
     /**

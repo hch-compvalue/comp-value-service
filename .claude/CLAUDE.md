@@ -188,6 +188,7 @@
    - **정의** (`InvestmentRankScorer`): 그날 후보 안 백분위(pandas rank(pct=True) 동일, 동점 평균순위) 평균 = (ROE TTM + 가치점수 + (1 − 최근 5거래일 수익률 백분위)) / 3 × 100. 셋 중 하나라도 없으면 null
    - **입력**: ROE = 추천 수집 시 FMP ratios-ttm 값(`RecommendedStocksEvaluator.collectCandidates`, 추가 호출 없음), 1주 수익률 = 평가 시 받는 1년 가격이력(`StockEvaluationService.calculateReturnPct`, 추가 호출 없음)
    - **저장**: `tb_evaluation_history` roe / return_1w_pct / roe_pct / value_pct / pullback_pct / rank_score (10-14 이전 행 null). 성과추적 `byRank`(상위 20%·중간·하위 20%)로 실전 검증
+   - **성과추적 그룹 추가** (2026-10-22, `EvaluationPerformanceService`): `byBuyTarget`(매수 대상 = 순위 상위 20% · 가치점수 ≥ 73 · 0 < 현재가 < 적정가×0.95 · 금융 제외, 프론트 `util/BuyTargetUtil.js` 와 같은 기준 / 그 외 후보 / 후보 전체), `byValueBand`(가치 B 이상 / C 이하), `byProfile` 에 "<프로파일> 단독" 행. 화면 맨 위 핵심 질문 4개가 이 그룹들의 중앙값 차이를 사용
    - **검증**: 개발 1,196종목 4주 IC +0.044(t3.9, 7/7년, 5분위 단조), 봉인(2024-10-15~2026-09, 1회 개봉·사전등록 기준 충족) IC 2w +0.014 / 4w +0.020, 상위−하위 +0.30/+0.65%p (현 가치점수 순위 +0.08/+0.12%p). 효과는 작음
    - 투자판정(매수 후보/관심/관망)은 그대로 — 화면 기본 정렬만 순위 점수로, 타이밍은 "참고" 표시
 10. **진입 타이밍: 지지/저항선 → 20거래일 예상 변동 범위** (2026-10-19, 점수 계산 미변경)
