@@ -48,4 +48,22 @@ public class ConfigComponent {
      * @return
      */
     public String getUpbitSecretKey() { return env.getProperty("UPBIT_OPEN_API_SECRET_KEY"); }
+
+    /**
+     * 한국투자증권(KIS) APP KEY (trader와 공유, 토큰 발급은 trader만)
+     * @return
+     */
+    public String getKisAppKey() { return env.getProperty("KIS_APP_KEY"); }
+
+    /**
+     * 한국투자증권(KIS) APP SECRET
+     * @return
+     */
+    public String getKisAppSecret() { return env.getProperty("KIS_APP_SECRET"); }
+
+    /**
+     * trader 내부 API 공유 비밀값 (KIS 토큰 조회용)
+     * @return
+     */
+    public String getTraderInternalToken() { return env.getProperty("TRADER_INTERNAL_TOKEN"); }
 }

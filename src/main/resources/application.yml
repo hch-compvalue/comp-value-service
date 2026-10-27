@@ -96,6 +96,8 @@ file:
 
 app:
   local: true
+  kis:
+    base-url: ${KIS_BASE_URL:https://openapi.koreainvestment.com:9443}   # 한국투자증권 실전 (키·토큰은 KisClient/KisTokenProvider)
 
 monitoring:
   log:

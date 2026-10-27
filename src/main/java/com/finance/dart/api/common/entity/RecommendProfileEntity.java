@@ -2,6 +2,7 @@ package com.finance.dart.api.common.entity;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.finance.dart.api.common.constants.Market;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -27,6 +28,10 @@ public class RecommendProfileEntity {
 
     @Column(name = "profile_name", nullable = false, unique = true, length = 100)
     private String profileName;             // 프로파일명 (예: 가치투자형, 성장주형)
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "market", nullable = false, length = 2, columnDefinition = Market.COLUMN_DEFINITION)
+    private Market market = Market.US;  // 시장 (US/KR, 기존 행은 US)
 
     @Column(name = "profile_desc", length = 500)
     private String profileDesc;             // 프로파일 설명
@@ -55,5 +60,11 @@ public class RecommendProfileEntity {
     @PreUpdate
     public void preUpdate() {
         this.updatedAt = LocalDateTime.now();
+    }
+
+    /** 시장 미지정 저장 방지 — 기존 저장 경로(미국)는 US */
+    @PrePersist
+    private void defaultMarket() {
+        if (market == null) market = Market.US;
     }
 }

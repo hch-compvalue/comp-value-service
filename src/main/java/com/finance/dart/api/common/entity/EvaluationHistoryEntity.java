@@ -1,5 +1,6 @@
 package com.finance.dart.api.common.entity;
 
+import com.finance.dart.api.common.constants.Market;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -41,6 +42,10 @@ public class EvaluationHistoryEntity {
 
     @Column(name = "symbol", nullable = false, length = 20)
     private String symbol;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "market", nullable = false, length = 2, columnDefinition = Market.COLUMN_DEFINITION)
+    private Market market = Market.US;  // 시장 (US/KR, 기존 행은 US)
 
     @Column(name = "company_name", length = 200)
     private String companyName;
@@ -118,4 +123,10 @@ public class EvaluationHistoryEntity {
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
+
+    /** 시장 미지정 저장 방지 — 기존 저장 경로(미국)는 US */
+    @PrePersist
+    private void defaultMarket() {
+        if (market == null) market = Market.US;
+    }
 }

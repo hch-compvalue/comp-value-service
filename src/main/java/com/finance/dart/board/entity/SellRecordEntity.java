@@ -3,6 +3,7 @@ package com.finance.dart.board.entity;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.finance.dart.member.entity.MemberEntity;
+import com.finance.dart.api.common.constants.Market;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
@@ -32,6 +33,11 @@ public class SellRecordEntity {
 
     @NotNull
     private String symbol;          // 티커
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "market", nullable = false, length = 2, columnDefinition = Market.COLUMN_DEFINITION)
+    private Market market = Market.US;  // 시장 (US/KR, 기존 행은 US)
+
     private String companyName;     // 기업명
 
     private String sellDate;        // 매도일자
@@ -48,4 +54,10 @@ public class SellRecordEntity {
 
     private LocalDateTime createdAt = LocalDateTime.now();
     private LocalDateTime updatedAt = LocalDateTime.now();
+
+    /** 시장 미지정 저장 방지 — 기존 저장 경로(미국)는 US */
+    @PrePersist
+    private void defaultMarket() {
+        if (market == null) market = Market.US;
+    }
 }
