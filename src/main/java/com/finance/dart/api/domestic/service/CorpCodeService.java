@@ -59,6 +59,17 @@ public class CorpCodeService {
                 .orElse(null);
     }
 
+    /**
+     * 고유번호 zip 파일 파싱 (파일을 직접 받은 경우 — 국내 종목 마스터 수집, 타임아웃·재시도는 호출부)
+     *
+     * @param zipFile         OpenDart corpCode.xml zip
+     * @param publicCompanyYn 상장기업 여부
+     * @return CorpCodeResDTO 객체
+     */
+    public CorpCodeResDTO parseCorpCodeZip(byte[] zipFile, boolean publicCompanyYn) {
+        return getZipData(zipFile, publicCompanyYn);
+    }
+
     private CorpCodeResDTO getZipData(byte[] zipFile, boolean publicCompanyYn) {
         String xmlContent = XmlUtil.getXmlContentOfZipFile(zipFile);
         if (xmlContent == null || xmlContent.isEmpty()) {
