@@ -10,8 +10,9 @@ import java.util.*;
 /**
  * 이번 실행에서 받을 재무 보고서 목록
  * 1) 공시 목록: 최근 정기보고서를 낸 회사 (신규·정정) — 그 공시일 이후 확인한 적 없으면 다시 받는다
- * 2) 이력 채우기: 5년 안의 보고서 중 아직 없는 것, 최신 기간부터
- *    - NONE(데이터 없음)은 기간 종료 150일 이내(공시 기한 안)일 때만 7일마다 다시 확인
+ * 2) 이력 채우기: 5년 안의 보고서 중 아직 없는 것, 최신 기간부터 — 제출 기한이 지난 보고서만
+ *    (기한 전 조기 공시는 1)이 받는다. 기한 전 조회는 대부분 '데이터 없음'이라 호출 낭비 — 10-29 첫 적재에서 분기당 약 5,000건)
+ *    - NONE(데이터 없음)은 기간 종료 150일 이내(늦은 제출)일 때만 7일마다 다시 확인
  */
 public final class KrFinancialPlanner {
 
@@ -76,7 +77,7 @@ public final class KrFinancialPlanner {
             for (int year = firstYear; year <= today.getYear(); year++) {
                 for (KrReportType type : KrReportType.values()) {
                     LocalDate periodEnd = type.periodEnd(year, company.fiscalMonth());
-                    if (periodEnd.isAfter(today)) continue;
+                    if (!type.deadlinePassed(periodEnd, today)) continue;
                     String key = key(company.stockCode(), year, type.code());
                     if (alreadyPlanned.contains(key) || !needsFetch(states.get(key), periodEnd, now)) continue;
                     tasks.add(new Task(company, new KrReportType.Target(year, type), periodEnd));

@@ -14,16 +14,18 @@ import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import java.net.URI;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * OpenDart 조회 클라이언트 (국내 재무 수집용 — 구 국내 화면의 FinancialStatementService는 그대로 둔다)
  * - 타임아웃: 연결 5초 / 응답 30초 (재무 응답이 수백 KB)
  * - 재시도: 최대 3회, 네트워크 오류·5xx·시스템 점검(800)·정의되지 않은 오류(900)만
  * - status 013(데이터 없음)은 정상 결과(빈 목록), 020(일일 한도 초과)은 DartLimitExceededException
- * - 호출 간격 200ms(초당 5건, 스레드 공유), 호출 수를 세어 이번 실행 예산을 넘지 않게 한다
+ * - 호출 간격 200ms(초당 5건, 스레드 공유), 오늘(KST) 호출 수를 세어 하루 예산을 넘지 않게 한다
+ *   (파드 재시작 시 0부터 다시 세므로 최종 방어선은 OpenDart 020 응답)
  */
 @Slf4j
 @Component
@@ -40,14 +42,16 @@ public class DartClient {
     private static final int CONNECT_TIMEOUT_MS = 5_000;
     private static final int READ_TIMEOUT_MS = 30_000;
     private static final String BASE_URL = "https://opendart.fss.or.kr/api/";
+    private static final ZoneId ZONE = ZoneId.of("Asia/Seoul");
 
     private final ConfigComponent configComponent;
     private final ObjectMapper objectMapper;
     private final RestTemplate restTemplate;
     private final long retryBackoffMs;
     private final long minIntervalMs;
-    private final AtomicInteger callCount = new AtomicInteger();
     private long lastCallAt = 0;
+    private LocalDate countDate;
+    private int dailyCount;
 
     /** 응답 (status 000 = rows 있음, 013 = rows 빈 목록) */
     public record Result(String status, Map<String, Object> body, List<Map<String, Object>> rows) {
@@ -71,13 +75,23 @@ public class DartClient {
         this.minIntervalMs = minIntervalMs;
     }
 
-    /** 지금까지 호출 수 (실행마다 resetCallCount) */
-    public int callCount() {
-        return callCount.get();
+    /** 오늘(KST) 호출 수 — 이 파드 기준 */
+    public synchronized int callsToday() {
+        rollDate();
+        return dailyCount;
     }
 
-    public void resetCallCount() {
-        callCount.set(0);
+    private synchronized void countCall() {
+        rollDate();
+        dailyCount++;
+    }
+
+    private void rollDate() {
+        LocalDate today = LocalDate.now(ZONE);
+        if (!today.equals(countDate)) {
+            countDate = today;
+            dailyCount = 0;
+        }
     }
 
     /**
@@ -91,7 +105,7 @@ public class DartClient {
         String last = "";
         for (int attempt = 1; attempt <= MAX_RETRY; attempt++) {
             acquire();
-            callCount.incrementAndGet();
+            countCall();
             try {
                 String raw = restTemplate.getForObject(uri(api, apiKey, params), String.class);
                 Map<String, Object> body = parse(raw);

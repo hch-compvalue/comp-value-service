@@ -1,5 +1,8 @@
 package com.finance.dart.monitoring.service;
 
+import com.finance.dart.api.domestic.kis.KisApi;
+import com.finance.dart.api.domestic.kis.KisApiException;
+import com.finance.dart.api.domestic.kis.KisClient;
 import com.finance.dart.common.component.ConfigComponent;
 import com.finance.dart.common.exception.BizException;
 import com.finance.dart.monitoring.entity.ExternalApiSettingEntity;
@@ -15,12 +18,14 @@ import org.springframework.web.client.RestTemplate;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
  * 외부 API 헬스체크 서비스
- * - FMP, DART, Upbit, OpenAI 각각 경량 요청으로 UP/DOWN + 응답시간 측정
+ * - FMP, DART, KIS, Yahoo, Upbit, OpenAI 각각 경량 요청으로 UP/DOWN + 응답시간 측정
+ * - KIS는 KisClient 로 한 번만 조회 (토큰은 trader 공유 토큰, 호출 한도는 KisRateLimiter 공유)
  * - 30초 주기로 호출 (rate limit 부담 최소화)
  * - RestTemplate 사용 (실제 API 호출과 동일한 HTTP 클라이언트)
  * - 상태: UP / DOWN / NOT_CONFIGURED(API 키 없음) / DISABLED(대시보드에서 모니터링 끔 — 호출 안 함)
@@ -31,10 +36,17 @@ public class ExternalApiHealthService {
 
     public static final String FMP = "FMP";
     public static final String DART = "DART";
+    public static final String KIS = "KIS";
+    public static final String YAHOO = "Yahoo";
     public static final String UPBIT = "Upbit";
     public static final String OPENAI = "OpenAI";
     /** 확인 대상 (화면 표시 순서) */
-    public static final List<String> API_NAMES = List.of(FMP, DART, UPBIT, OPENAI);
+    public static final List<String> API_NAMES = List.of(FMP, DART, KIS, YAHOO, UPBIT, OPENAI);
+
+    /** KIS 확인 종목: 삼성전자 현재가 */
+    private static final Map<String, String> KIS_CHECK_PARAMS = Map.of("FID_COND_MRKT_DIV_CODE", "J", "FID_INPUT_ISCD", "005930");
+    /** Yahoo 는 브라우저 User-Agent 가 없으면 429 를 주므로 실제 호출(DomesticStockCalculationService)과 같은 값 */
+    private static final String BROWSER_USER_AGENT = "Mozilla/5.0";
 
     public static final String STATUS_UP = "UP";
     public static final String STATUS_DOWN = "DOWN";
@@ -47,11 +59,13 @@ public class ExternalApiHealthService {
     private final RestTemplate healthCheckRestTemplate;
     private final ConfigComponent configComponent;
     private final ExternalApiSettingRepository settingRepository;
+    private final KisClient kisClient;
 
     /** 캐시된 결과 — 30초 주기로 갱신 */
     private volatile List<ServiceStatusDto> cachedStatus = List.of();
 
-    public ExternalApiHealthService(ConfigComponent configComponent, ExternalApiSettingRepository settingRepository) {
+    public ExternalApiHealthService(ConfigComponent configComponent, ExternalApiSettingRepository settingRepository,
+                                    KisClient kisClient) {
         // 헬스체크 전용 RestTemplate (connectTimeout=5s, readTimeout=10s)
         HttpComponentsClientHttpRequestFactory factory = new HttpComponentsClientHttpRequestFactory();
         factory.setConnectTimeout(5000);
@@ -59,6 +73,7 @@ public class ExternalApiHealthService {
         this.healthCheckRestTemplate = new RestTemplate(factory);
         this.configComponent = configComponent;
         this.settingRepository = settingRepository;
+        this.kisClient = kisClient;
     }
 
     public List<ServiceStatusDto> getCachedStatus() {
@@ -118,6 +133,8 @@ public class ExternalApiHealthService {
         return switch (name) {
             case FMP -> checkFmp();
             case DART -> checkDart();
+            case KIS -> checkKis();
+            case YAHOO -> checkYahoo();
             case UPBIT -> checkUpbit();
             case OPENAI -> checkOpenAi();
             default -> ServiceStatusDto.builder().name(name).status(STATUS_DOWN).build();
@@ -146,6 +163,32 @@ public class ExternalApiHealthService {
         // company.json: 단일 기업 정보 조회 (경량 JSON 응답)
         return timedCheck(DART,
                 "https://opendart.fss.or.kr/api/company.json?crtfc_key=" + apiKey + "&corp_code=00126380");
+    }
+
+    private ServiceStatusDto checkKis() {
+        if (isBlank(configComponent.getKisAppKey()) || isBlank(configComponent.getKisAppSecret())) {
+            return notConfigured(KIS);
+        }
+        long start = System.currentTimeMillis();
+        String status = STATUS_UP;
+        try {
+            kisClient.getOnce(KisApi.PRICE, KIS_CHECK_PARAMS);
+        } catch (KisApiException e) {
+            // 실패 사유는 KisClient 가 이미 경고 로그로 남김
+            status = STATUS_DOWN;
+        }
+        return ServiceStatusDto.builder().name(KIS).status(status)
+                .uptime((System.currentTimeMillis() - start) + "ms").build();
+    }
+
+    private ServiceStatusDto checkYahoo() {
+        return timedCheckWithHeaders(YAHOO,
+                "https://query1.finance.yahoo.com/v8/finance/chart/005930.KS?range=1d&interval=1d",
+                HttpHeaders.USER_AGENT, BROWSER_USER_AGENT);
+    }
+
+    private static boolean isBlank(String s) {
+        return s == null || s.isBlank();
     }
 
     private ServiceStatusDto checkUpbit() {

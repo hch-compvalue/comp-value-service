@@ -74,6 +74,18 @@ public class KisClient {
      * @throws KisApiException 키 미설정, 재시도 후에도 실패
      */
     public Map<String, Object> get(KisApi api, Map<String, String> params) {
+        return get(api, params, MAX_RETRY);
+    }
+
+    /**
+     * 한 번만 조회 (재시도 없음) — 헬스체크처럼 빨리 실패를 알아야 할 때
+     * @throws KisApiException 키 미설정, 실패
+     */
+    public Map<String, Object> getOnce(KisApi api, Map<String, String> params) {
+        return get(api, params, 1);
+    }
+
+    private Map<String, Object> get(KisApi api, Map<String, String> params, int maxAttempts) {
         String appKey = configComponent.getKisAppKey();
         String appSecret = configComponent.getKisAppSecret();
         if (isBlank(appKey) || isBlank(appSecret)) {
@@ -81,7 +93,7 @@ public class KisClient {
         }
 
         String last = "";
-        for (int attempt = 1; attempt <= MAX_RETRY; attempt++) {
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
             rateLimiter.acquire();
             try {
                 Map<String, Object> body = restTemplate.exchange(uri(api, params), HttpMethod.GET,
@@ -101,8 +113,8 @@ public class KisClient {
             } catch (KisApiException e) {
                 last = e.getMessage();      // trader 토큰 수신 실패 — 일시적일 수 있어 재시도
             }
-            log.warn("[KIS] {} 실패 ({}/{}): {}", api.name(), attempt, MAX_RETRY, last);
-            if (attempt < MAX_RETRY) sleep(retryBackoffMs * attempt);
+            log.warn("[KIS] {} 실패 ({}/{}): {}", api.name(), attempt, maxAttempts, last);
+            if (attempt < maxAttempts) sleep(retryBackoffMs * attempt);
         }
         throw new KisApiException("KIS " + api.name() + " 실패: " + last);
     }

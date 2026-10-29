@@ -30,14 +30,14 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * 국내 재무 수집 스케줄 (KR_FINANCIAL) — OpenDart 정기보고서
  * 공시 목록(최근 7일 정기보고서) → 새/정정 보고서 수집 → 5년 이력 중 빠진 것 채우기(최신 기간부터)
- * - 실행당 OpenDart 호출 15,000건까지 (일일 한도 20,000 중 구 국내 화면 몫 남김), 020(한도 초과)이면 그날 중단
+ * - 하루 OpenDart 호출 15,000건까지 (일일 한도 20,000 중 구 국내 화면 몫 남김 — 수동 실행과 자동 실행 합산), 020(한도 초과)이면 그날 중단
  * - 보고서 단위로 저장하므로 다음 실행이 이어서 받는다 (첫 적재 5년 ≈ 5.6만 건 → 약 4일)
  */
 @Slf4j
 @Service
 public class KrFinancialJob implements ManagedScheduleJob {
 
-    static final int CALL_BUDGET_PER_RUN = 15_000;
+    static final int DAILY_CALL_BUDGET = 15_000;
     static final int WORKER_THREADS = 3;
     static final int MAX_CONSECUTIVE_FAILURES = 30;
     static final double FAILURE_TOLERANCE_RATIO = 0.01;
@@ -116,7 +116,7 @@ public class KrFinancialJob implements ManagedScheduleJob {
         ScheduleRunStatus status = ScheduleRunStatus.FAILED;
         String message = "알 수 없는 오류 (로그 확인)";
         try {
-            dartClient.resetCallCount();
+            int callsBefore = dartClient.callsToday();
             LocalDateTime now = LocalDateTime.now(ScheduleManagerService.SCHEDULE_ZONE);
             Map<String, Company> companies = loadCompanies();
             List<ReportState> stateList = reportRepository.findAllStates();
@@ -136,7 +136,7 @@ public class KrFinancialJob implements ManagedScheduleJob {
             Summary summary = execute(tasks, preferredFs);
             status = summary.isSuccess() ? ScheduleRunStatus.SUCCESS : ScheduleRunStatus.FAILED;
             message = String.format("공시 %d건(수집 대상 %d) / 이력 채우기 대상 %d / %s / OpenDart %d건 호출",
-                    disclosures.size(), newReports.size(), backfill.size(), summary.summary(), dartClient.callCount());
+                    disclosures.size(), newReports.size(), backfill.size(), summary.summary(), dartClient.callsToday() - callsBefore);
         } catch (DartApiException | DataAccessException e) {
             log.error("[국내 재무] 중단", e);
             message = "중단: " + e.getMessage();
@@ -209,8 +209,8 @@ public class KrFinancialJob implements ManagedScheduleJob {
             summary.skipped.incrementAndGet();
             return;
         }
-        if (dartClient.callCount() + MAX_CALLS_PER_TASK > CALL_BUDGET_PER_RUN) {
-            summary.stop("호출 예산 " + CALL_BUDGET_PER_RUN + "건 소진");
+        if (dartClient.callsToday() + MAX_CALLS_PER_TASK > DAILY_CALL_BUDGET) {
+            summary.stop("오늘 호출 예산 " + DAILY_CALL_BUDGET + "건 소진");
             summary.skipped.incrementAndGet();
             return;
         }

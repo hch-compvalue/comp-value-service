@@ -15,10 +15,10 @@ import java.util.regex.Pattern;
  */
 public enum KrReportType {
 
-    Q1("11013", 3),
-    HALF("11012", 6),
-    Q3("11014", 9),
-    ANNUAL("11011", 0),
+    Q1("11013", 3, 45),
+    HALF("11012", 6, 45),
+    Q3("11014", 9, 45),
+    ANNUAL("11011", 0, 90),
     ;
 
     private static final int MONTHS_PER_YEAR = 12;
@@ -30,10 +30,12 @@ public enum KrReportType {
 
     private final String code;
     private final int monthsAfterFiscalEnd;
+    private final int filingDeadlineDays;   // 제출 기한 (기간 종료 후 일수 — 분기·반기 45일, 사업보고서 90일)
 
-    KrReportType(String code, int monthsAfterFiscalEnd) {
+    KrReportType(String code, int monthsAfterFiscalEnd, int filingDeadlineDays) {
         this.code = code;
         this.monthsAfterFiscalEnd = monthsAfterFiscalEnd;
+        this.filingDeadlineDays = filingDeadlineDays;
     }
 
     public String code() {
@@ -42,6 +44,11 @@ public enum KrReportType {
 
     public static Optional<KrReportType> fromCode(String code) {
         return Arrays.stream(values()).filter(t -> t.code.equals(code)).findFirst();
+    }
+
+    /** 제출 기한이 지났는가 (기한 전 공시는 공시 목록으로 받는다) */
+    public boolean deadlinePassed(LocalDate periodEnd, LocalDate today) {
+        return today.isAfter(periodEnd.plusDays(filingDeadlineDays));
     }
 
     /** 결산기 종료일 (그 달 말일) */
