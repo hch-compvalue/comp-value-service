@@ -24,7 +24,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * 국내 종목·일봉 수집 스케줄 (KR_DAILY_PRICE)
- * 종목 마스터 갱신 → 지수 일봉 → 종목 일봉(3개 스레드, KIS 초당 6건 제한은 KisRateLimiter가 전체 공유)
+ * 종목 마스터 갱신 → 업종(KSIC) 보강 → 지수 일봉 → 종목 일봉(3개 스레드, KIS 초당 6건 제한은 KisRateLimiter가 전체 공유)
  * - 종목 단위로 저장하므로 중간에 끊겨도(배포·PC 꺼짐) 다음 실행이 이어서 받는다
  * - 연속 실패가 많으면(KIS 장애·토큰 문제) 나머지를 건너뛰고 중단
  */
@@ -45,15 +45,17 @@ public class KrDailyPriceJob implements ManagedScheduleJob {
     private volatile ExecutorService workers;
 
     private final KrStockMasterService masterService;
+    private final KrStockInfoEnricher stockInfoEnricher;
     private final KrDailyPriceCollector collector;
     private final KrStockRepository krStockRepository;
     private final KrPriceJdbcRepository priceRepository;
     private final ScheduleRunHistoryService scheduleRunHistoryService;
 
-    public KrDailyPriceJob(KrStockMasterService masterService, KrDailyPriceCollector collector,
+    public KrDailyPriceJob(KrStockMasterService masterService, KrStockInfoEnricher stockInfoEnricher, KrDailyPriceCollector collector,
                            KrStockRepository krStockRepository, KrPriceJdbcRepository priceRepository,
                            ScheduleRunHistoryService scheduleRunHistoryService) {
         this.masterService = masterService;
+        this.stockInfoEnricher = stockInfoEnricher;
         this.collector = collector;
         this.krStockRepository = krStockRepository;
         this.priceRepository = priceRepository;
@@ -104,10 +106,11 @@ public class KrDailyPriceJob implements ManagedScheduleJob {
         try {
             LocalDate settled = KrDailyPriceCollector.settledDate(LocalDateTime.now(ScheduleManagerService.SCHEDULE_ZONE));
             String master = refreshMaster();
+            String industry = enrichIndustry();
             String index = collectIndexes(settled);
             StockSummary stocks = collectStocks(settled, maxCount);
             status = stocks.isSuccess() ? ScheduleRunStatus.SUCCESS : ScheduleRunStatus.FAILED;
-            message = String.format("기준일 %s / %s / %s / %s", settled, master, index, stocks.summary());
+            message = String.format("기준일 %s / %s / %s / %s / %s", settled, master, industry, index, stocks.summary());
         } catch (KrCollectException | DataAccessException e) {
             log.error("[국내 수집] 중단", e);
             message = "중단: " + e.getMessage();
@@ -129,6 +132,16 @@ public class KrDailyPriceJob implements ManagedScheduleJob {
             if (krStockRepository.findByActiveOrderByStockCode(ACTIVE).isEmpty()) throw e;
             log.warn("[국내 수집] 종목 마스터 갱신 실패 — 기존 목록으로 진행: {}", e.getMessage());
             return "마스터 갱신 실패(기존 목록 사용)";
+        }
+    }
+
+    /** 업종 보강 실패는 일봉 수집을 막지 않는다 (다음 실행이 다시 시도) */
+    private String enrichIndustry() {
+        try {
+            return stockInfoEnricher.enrich(LocalDateTime.now(ScheduleManagerService.SCHEDULE_ZONE)).summary();
+        } catch (DataAccessException e) {
+            log.warn("[국내 수집] 업종 보강 실패: {}", e.getMessage());
+            return "업종 보강 실패";
         }
     }
 

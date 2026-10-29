@@ -53,6 +53,18 @@ public class KrStockEntity {
     @Column(name = "administrative", nullable = false, length = 1)
     private String administrative;          // 관리종목 Y/N
 
+    @Column(name = "listed_shares")
+    private Long listedShares;              // 상장주식수 (마스터 파일, 천 주 단위 → 주)
+
+    @Column(name = "ksic_code", length = 6)
+    private String ksicCode;                // 표준산업분류 (KIS 주식기본조회, 앞 2자리 대분류 번호 + KSIC 4자리 — 예: 116409 기타 금융업)
+
+    @Column(name = "ksic_name", length = 100)
+    private String ksicName;
+
+    @Column(name = "ksic_checked_at")
+    private LocalDateTime ksicCheckedAt;    // 업종 조회 시각 (30일 지나면 다시 조회)
+
     @Column(name = "active", nullable = false, length = 1)
     private String active;                  // 마스터에 있으면 Y, 사라지면 N
 

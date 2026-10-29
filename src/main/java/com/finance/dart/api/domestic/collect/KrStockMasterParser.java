@@ -38,7 +38,7 @@ public final class KrStockMasterParser {
     /** 마스터 1행 (보통주) */
     public record Row(String stockCode, String stockName, KrExchange exchange, String indexLarge, String indexMid,
                       String indexSmall, LocalDate listedDate, String fiscalMonth, String tradingHalt,
-                      String administrative) {}
+                      String administrative, Long listedShares) {}
 
     private KrStockMasterParser() {}
 
@@ -82,7 +82,18 @@ public final class KrStockMasterParser {
                 parseDate(ascii(line, tailStart + exchange.getListedDateOffset(), KrExchange.DATE_LENGTH)),
                 ascii(line, tailStart + exchange.getFiscalMonthOffset(), KrExchange.MONTH_LENGTH),
                 yesNo(ascii(line, tailStart + exchange.getHaltOffset(), 1)),
-                yesNo(ascii(line, tailStart + exchange.getAdministrativeOffset(), 1)));
+                yesNo(ascii(line, tailStart + exchange.getAdministrativeOffset(), 1)),
+                parseShares(ascii(line, tailStart + exchange.getListedSharesOffset(), KrExchange.LISTED_SHARES_LENGTH)));
+    }
+
+    /** 천 주 단위 → 주. 0이거나 숫자가 아니면 null */
+    private static Long parseShares(String thousands) {
+        try {
+            long v = Long.parseLong(thousands.trim());
+            return v > 0 ? v * KrExchange.LISTED_SHARES_UNIT : null;
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     private static String ascii(byte[] line, int offset, int length) {

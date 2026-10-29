@@ -101,6 +101,7 @@ public class KrStockMasterService {
         entity.setIndexSmall(row.indexSmall());
         entity.setListedDate(row.listedDate());
         entity.setFiscalMonth(row.fiscalMonth());
+        entity.setListedShares(row.listedShares());
         entity.setTradingHalt(row.tradingHalt());
         entity.setAdministrative(row.administrative());
         entity.setActive(YES);
