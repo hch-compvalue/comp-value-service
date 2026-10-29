@@ -24,7 +24,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * 국내 종목·일봉 수집 스케줄 (KR_DAILY_PRICE)
- * 종목 마스터 갱신 → 지수 일봉 → 종목 일봉(3개 스레드, KIS 초당 8건 제한은 KisRateLimiter가 전체 공유)
+ * 종목 마스터 갱신 → 지수 일봉 → 종목 일봉(3개 스레드, KIS 초당 6건 제한은 KisRateLimiter가 전체 공유)
  * - 종목 단위로 저장하므로 중간에 끊겨도(배포·PC 꺼짐) 다음 실행이 이어서 받는다
  * - 연속 실패가 많으면(KIS 장애·토큰 문제) 나머지를 건너뛰고 중단
  */
