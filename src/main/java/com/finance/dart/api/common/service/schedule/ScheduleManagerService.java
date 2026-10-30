@@ -11,9 +11,11 @@ import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.support.CronExpression;
-import org.springframework.scheduling.support.CronTrigger;
 import org.springframework.stereotype.Service;
 
+import jakarta.annotation.PreDestroy;
+
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
@@ -24,7 +26,12 @@ import java.util.stream.Collectors;
 
 /**
  * 스케줄 관리
- * - 기존 @Scheduled(코드 고정 cron) 대신 DB 설정(tb_schedule_job)으로 TaskScheduler에 등록 → 화면에서 주기·사용여부 변경 시 재배포 없이 즉시 반영
+ * - 기존 @Scheduled(코드 고정 cron) 대신 DB 설정(tb_schedule_job) → 화면에서 주기·사용여부 변경 시 재배포 없이 즉시 반영
+ * - 1분마다 벽시계로 "예정 시각이 지났고 아직 실행 안 한 회차"를 실행 (2026-10-30 변경)
+ *   · 이전 CronTrigger 방식은 다음 실행까지 남은 시간을 단조 시계로 재서, PC 절전(WSL 일시정지) 시간만큼 이후 실행이 계속 밀렸다
+ *     (10-30: 절전 40분 → 16:00 국내 일봉이 16:40 시작)
+ *   · 따라잡기는 예정 시각부터 3시간 안까지만 — 전날 놓친 회차를 다음 날 아침에 돌리지 않는다
+ *   · 그 회차 이후 실행 이력(수동 포함)이 있으면 다시 돌리지 않는다 (배포 재시작 시 중복 방지)
  * - 실행 자체·중복 방지·이력은 각 ManagedScheduleJob 구현체가 담당
  */
 @Slf4j
@@ -47,13 +54,23 @@ public class ScheduleManagerService {
     /** 이력 조회 최대 건수 */
     private static final int MAX_HISTORY_LIMIT = 100;
 
+    /** 예정 시각 확인 주기 */
+    static final Duration CHECK_INTERVAL = Duration.ofMinutes(1);
+    /** 예정 시각이 지난 회차를 따라잡아 실행하는 한도 */
+    static final Duration CATCH_UP_WINDOW = Duration.ofHours(3);
+    /** 이보다 늦게 실행하면 경고 로그 (절전 등) */
+    private static final Duration LATE_WARN_THRESHOLD = Duration.ofMinutes(5);
+
     private final TaskScheduler taskScheduler;
     private final ScheduleJobRepository scheduleJobRepository;
     private final ScheduleRunHistoryService scheduleRunHistoryService;
     private final Map<ScheduleJobType, ManagedScheduleJob> jobs;
 
-    /** 등록된 자동 실행 트리거 (비활성 작업은 없음) */
-    private final Map<ScheduleJobType, ScheduledFuture<?>> scheduledFutures = new EnumMap<>(ScheduleJobType.class);
+    /** 현재 설정 (기동·변경 시 갱신, 1분 확인이 읽음) */
+    private final Map<ScheduleJobType, ScheduleJobEntity> configs = new EnumMap<>(ScheduleJobType.class);
+    /** 작업별 마지막으로 처리한 예정 회차 (같은 회차를 두 번 실행하지 않게) */
+    private final Map<ScheduleJobType, ZonedDateTime> handledSlots = new EnumMap<>(ScheduleJobType.class);
+    private ScheduledFuture<?> checker;
 
     public ScheduleManagerService(TaskScheduler taskScheduler,
                                   ScheduleJobRepository scheduleJobRepository,
@@ -78,6 +95,58 @@ public class ScheduleManagerService {
             ScheduleJobEntity config = loadOrCreateConfig(type);
             applySchedule(type, config);
         }
+        checker = taskScheduler.scheduleWithFixedDelay(this::checkDueJobsSafely, CHECK_INTERVAL);
+    }
+
+    @PreDestroy
+    public void stopChecker() {
+        if (checker != null) checker.cancel(false);
+    }
+
+    /** 확인 중 예외가 나도 다음 확인이 계속 돌게 (scheduleWithFixedDelay 는 예외 시 반복을 멈춘다) */
+    private void checkDueJobsSafely() {
+        try {
+            checkDueJobs(ZonedDateTime.now(SCHEDULE_ZONE));
+        } catch (RuntimeException e) {
+            log.error("[스케줄 관리] 예정 시각 확인 실패", e);
+        }
+    }
+
+    /**
+     * 예정 시각이 지난(3시간 안) 회차 중 아직 처리하지 않았고 그 뒤 실행 이력도 없는 작업을 자동 실행
+     */
+    synchronized void checkDueJobs(ZonedDateTime now) {
+        for (Map.Entry<ScheduleJobType, ScheduleJobEntity> e : configs.entrySet()) {
+            ScheduleJobType type = e.getKey();
+            ScheduleJobEntity config = e.getValue();
+            if (!FLAG_YES.equals(config.getEnabled())) continue;
+            ZonedDateTime slot = latestDueSlot(CronExpression.parse(config.getCronExpression()), now);
+            if (slot == null || slot.equals(handledSlots.get(type))) continue;
+            handledSlots.put(type, slot);
+
+            boolean ranSinceSlot = scheduleRunHistoryService.getLast(type)
+                    .map(h -> !h.getStartedAt().isBefore(slot.toLocalDateTime()))
+                    .orElse(false);
+            if (ranSinceSlot) {
+                log.info("[스케줄 관리] {} {} 회차는 이미 실행됨 — 건너뜀", type, slot.toLocalDateTime());
+                continue;
+            }
+            if (Duration.between(slot, now).compareTo(LATE_WARN_THRESHOLD) > 0) {
+                log.warn("[스케줄 관리] {} 예정 {} → {}분 늦게 실행 (PC 절전·재시작 등)", type, slot.toLocalDateTime(), Duration.between(slot, now).toMinutes());
+            }
+            startAuto(jobs.get(type));
+        }
+    }
+
+    /** now 이전(포함) CATCH_UP_WINDOW 안의 마지막 예정 시각 (없으면 null) */
+    static ZonedDateTime latestDueSlot(CronExpression cron, ZonedDateTime now) {
+        ZonedDateTime last = null;
+        ZonedDateTime t = cron.next(now.minus(CATCH_UP_WINDOW).minusSeconds(1));
+        while (t != null && !t.isAfter(now)) {
+            last = t;
+            t = cron.next(t);
+        }
+        return last;
     }
 
     /**
@@ -147,21 +216,19 @@ public class ScheduleManagerService {
     }
 
     /**
-     * 트리거 재등록 (기존 트리거 취소 → 활성이면 새 cron으로 등록)
+     * 설정 반영 — 1분 확인이 새 설정을 읽는다
+     * - 변경 시점에 이미 지난 회차는 처리한 것으로 본다 (시각을 앞당겨 저장하자마자 바로 실행되는 것 방지)
      */
     private synchronized void applySchedule(ScheduleJobType type, ScheduleJobEntity config) {
-        ScheduledFuture<?> previous = scheduledFutures.remove(type);
-        if (previous != null) previous.cancel(false);   // 다음 실행 예약만 취소, 실행 중인 작업은 유지
-
+        boolean firstLoad = !configs.containsKey(type);
+        configs.put(type, config);
+        if (!firstLoad) {
+            handledSlots.put(type, latestDueSlot(CronExpression.parse(config.getCronExpression()), ZonedDateTime.now(SCHEDULE_ZONE)));
+        }
         if (!FLAG_YES.equals(config.getEnabled())) {
             log.info("[스케줄 관리] {} 비활성 — 자동 실행 안 함", type);
             return;
         }
-
-        ManagedScheduleJob job = jobs.get(type);
-        CronTrigger trigger = new CronTrigger(config.getCronExpression(), SCHEDULE_ZONE);
-        ScheduledFuture<?> future = taskScheduler.schedule(() -> startAuto(job), trigger);
-        scheduledFutures.put(type, future);
         log.info("[스케줄 관리] {} 등록 cron='{}' 다음 실행={}", type, config.getCronExpression(), nextRunAt(config));
     }
 

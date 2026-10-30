@@ -20,6 +20,8 @@ public interface KrFinancialReportRepository extends JpaRepository<KrFinancialRe
         LocalDateTime getCheckedAt();
     }
 
+    List<KrFinancialReportEntity> findByStockCode(String stockCode);
+
     @Query("select r.stockCode as stockCode, r.bsnsYear as bsnsYear, r.reprtCode as reprtCode, r.fsDiv as fsDiv, "
             + "r.periodEnd as periodEnd, r.checkedAt as checkedAt from KrFinancialReportEntity r")
     List<ReportState> findAllStates();

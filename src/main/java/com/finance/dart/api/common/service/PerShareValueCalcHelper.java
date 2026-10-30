@@ -2,7 +2,9 @@ package com.finance.dart.api.common.service;
 
 import com.finance.dart.api.common.constants.RequestContextConst;
 import com.finance.dart.api.common.context.RequestContext;
+import com.finance.dart.api.common.dto.CompanySharePriceCalculator;
 import com.finance.dart.api.common.dto.CompanySharePriceResultDetail;
+import com.finance.dart.api.common.dto.SectorCalculationParameters;
 import com.finance.dart.common.util.CalUtil;
 import com.finance.dart.common.util.StringUtil;
 import lombok.RequiredArgsConstructor;
@@ -301,6 +303,49 @@ public class PerShareValueCalcHelper {
             return "0.7";
         } else {
             return "0.9";  // 상한
+        }
+    }
+
+    /**
+     * V9: 그레이엄 스크리닝 (PER/PBR/복합/유동비율/연속흑자 5개 기준 통과수 → resultDetail) — 미국·국내 공용
+     * - 동적 안전마진이 통과수를 사용하므로 반드시 안전마진 계산 전에 호출
+     */
+    public void applyGrahamScreening(String symbol, SectorCalculationParameters sectorParams, CompanySharePriceCalculator calParam,
+                                     CompanySharePriceResultDetail resultDetail, Double pbrTTM) {
+        try {
+            BigDecimal perVal = new BigDecimal(calParam.getPer());
+
+            boolean perPass = perVal.compareTo(BigDecimal.ZERO) > 0 && perVal.compareTo(sectorParams.getMaxPER()) <= 0;
+            resultDetail.set그레이엄_PER통과(perPass);
+
+            boolean pbrPass = false;
+            BigDecimal pbrVal = BigDecimal.ZERO;
+            if (pbrTTM != null) {
+                pbrVal = BigDecimal.valueOf(pbrTTM);
+                pbrPass = pbrVal.compareTo(BigDecimal.ZERO) > 0 && pbrVal.compareTo(sectorParams.getMaxPBR()) <= 0;
+            }
+            resultDetail.set그레이엄_PBR통과(pbrPass);
+
+            boolean compositePass = false;
+            if (perVal.compareTo(BigDecimal.ZERO) > 0 && pbrVal.compareTo(BigDecimal.ZERO) > 0) {
+                compositePass = perVal.multiply(pbrVal).compareTo(sectorParams.getMaxPERxPBR()) <= 0;
+            }
+            resultDetail.set그레이엄_복합통과(compositePass);
+
+            BigDecimal currentRatioVal = new BigDecimal(calParam.getCurrentRatio());
+            boolean crPass = !sectorParams.isApplyCurrentRatio() || currentRatioVal.compareTo(new BigDecimal("1.5")) >= 0;
+            resultDetail.set그레이엄_유동비율통과(crPass);
+
+            boolean profitPass = new BigDecimal(calParam.getOperatingProfitPrePre()).signum() > 0
+                    && new BigDecimal(calParam.getOperatingProfitPre()).signum() > 0
+                    && new BigDecimal(calParam.getOperatingProfitCurrent()).signum() > 0;
+            resultDetail.set그레이엄_연속흑자통과(profitPass);
+
+            int passCount = (perPass?1:0) + (pbrPass?1:0) + (compositePass?1:0) + (crPass?1:0) + (profitPass?1:0);
+            resultDetail.set그레이엄_통과수(passCount);
+            resultDetail.set그레이엄_등급(passCount >= 5 ? "강력매수" : passCount >= 4 ? "매수" : passCount >= 3 ? "관망" : "위험");
+        } catch (Exception e) {
+            log.warn("[V9 그레이엄 스크리닝] {} - 스크리닝 실패: {}", symbol, e.getMessage());
         }
     }
 }

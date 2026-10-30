@@ -13,6 +13,14 @@ public class RedisKeyGenerator {
     }
 
     /**
+     * 국내 주당가치 계산 결과
+     * @return compvalue:domestic:calvalue:{version}:{stockCode}
+     */
+    public static String genDomesticCompValueRstData(String stockCode, String version) {
+        return "compvalue:domestic:calvalue:" + version + ":" + stockCode;
+    }
+
+    /**
      * 해외기업 프로필 데이터
      * @param symbol 기업티커
      * @return compvalue:abroad:profile:{symbol}

@@ -22,8 +22,13 @@ import java.util.Optional;
 public class KrDailyPriceCollector {
 
     static final int HISTORY_YEARS = 5;
-    /** 장 마감(15:30) 후 종가 확정 시각 — 이전에 실행하면 전날까지만 저장 (장중 가격이 종가로 저장되는 것 방지) */
-    static final LocalTime CLOSE_SETTLED_AT = LocalTime.of(15, 40);
+    /**
+     * 당일 종가 확정 시각 — 이전에 실행하면 전 거래일까지만 저장
+     * - KIS 일봉의 당일 종가는 정규장(15:30) 뒤에도 KRX 시간외 단일가(~18:00)·NXT 애프터마켓(~20:00) 체결로 계속 바뀐다
+     *   (10-30 확인: 16:40에 저장한 당일 종가가 18:10 조회값과 12종목 중 9종목 다름 → 다음 날 수정주가 변경으로 오인, 1,037종목 재수집)
+     * - 낮(16시) 배치는 항상 전 거래일까지 → 확정된 종가만 저장
+     */
+    static final LocalTime CLOSE_SETTLED_AT = LocalTime.of(20, 10);
 
     public enum Outcome { FULL, INCREMENTAL, READJUSTED, UP_TO_DATE }
 

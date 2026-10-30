@@ -2,6 +2,7 @@ package com.finance.dart.api.domestic.repository;
 
 import com.finance.dart.api.domestic.collect.KrDailyBar;
 import com.finance.dart.api.domestic.collect.KrIndexBar;
+import com.finance.dart.api.domestic.valuation.KrPriceSeries;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
@@ -45,7 +46,24 @@ public class KrPriceJdbcRepository {
 
     private static final String SELECT_LAST_INDEX_DATE = "SELECT max(trade_date) FROM tb_kr_index_daily WHERE index_code = ?";
 
+    private static final String SELECT_DAILY_CLOSES =
+            "SELECT trade_date, close_price FROM tb_kr_daily_price WHERE stock_code = ? AND trade_date >= ? ORDER BY trade_date";
+    private static final String SELECT_INDEX_CLOSES =
+            "SELECT trade_date, close_value FROM tb_kr_index_daily WHERE index_code = ? AND trade_date >= ? ORDER BY trade_date";
+
     private final JdbcTemplate jdbcTemplate;
+
+    /** 종목 종가 (from 이후, 날짜 오름차순) */
+    public List<KrPriceSeries.DailyClose> findDailyCloses(String stockCode, LocalDate from) {
+        return jdbcTemplate.query(SELECT_DAILY_CLOSES, (rs, i) ->
+                new KrPriceSeries.DailyClose(rs.getDate(1).toLocalDate(), rs.getInt(2)), stockCode, Date.valueOf(from));
+    }
+
+    /** 지수 종가 (from 이후, 날짜 오름차순) */
+    public List<KrPriceSeries.DailyClose> findIndexCloses(String indexCode, LocalDate from) {
+        return jdbcTemplate.query(SELECT_INDEX_CLOSES, (rs, i) ->
+                new KrPriceSeries.DailyClose(rs.getDate(1).toLocalDate(), rs.getBigDecimal(2).doubleValue()), indexCode, Date.valueOf(from));
+    }
 
     /** 마지막 저장 일봉 (종목코드 → 날짜·종가) */
     public record LastBar(LocalDate tradeDate, int closePrice) {}

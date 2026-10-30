@@ -2,6 +2,7 @@ package com.finance.dart.api.common.service;
 
 import com.finance.dart.api.common.constants.RequestContextConst;
 import com.finance.dart.api.common.context.RequestContext;
+import com.finance.dart.api.common.constants.ValuationConstants;
 import com.finance.dart.api.common.dto.CompanySharePriceCalculator;
 import com.finance.dart.api.common.dto.CompanySharePriceResultDetail;
 import com.finance.dart.api.common.dto.SectorCalculationParameters;
@@ -29,17 +30,13 @@ public class PerShareValueCalculationService {
     /** 주당가치 소수 자릿수 (센트) */
     private static final int PER_SHARE_SCALE = 2;
 
-    /** V9: 유효세율 없을 때 기본세율 (미국 법인세 법정세율) */
-    private static final BigDecimal DEFAULT_TAX_RATE_V9 = new BigDecimal("0.21");
-    /** V9: 유효세율 상한 (일회성 세금으로 인한 과도한 할인 방지) */
-    private static final BigDecimal MAX_TAX_RATE_V9 = new BigDecimal("0.35");
-    /**
-     * V9: 정상 차입금리 — 이자비용 하한 = 총부채(리스 포함) × 6%
-     * 자기자본법은 부채를 이자로만 반영하므로 저금리 차입·리스 부채가 큰 기업이 과대평가됨
-     * (백테스트: 고부채+장부이자율<3% 그룹 괴리 중앙값 V8 -52% → V9 +15%). 6% ≈ 미국 BBB 회사채 장기금리,
-     * 0%→6% 에서 PER경로 IC12 0.036→0.051, 연도별 7/8 양수 (8% 이상은 안정성 저하)
+    /*
+     * V9 시장별 상수는 ValuationConstants (US: 기본세율 21% / 세율 상한 35% / 정상 차입금리 6%)
+     * - 정상 차입금리: 이자비용 하한 = 총부채(리스 포함) × 6%. 자기자본법은 부채를 이자로만 반영하므로 저금리 차입·리스 부채가
+     *   큰 기업이 과대평가됨 (백테스트: 고부채+장부이자율<3% 그룹 괴리 중앙값 V8 -52% → V9 +15%). 6% ≈ 미국 BBB 회사채 장기금리,
+     *   0%→6% 에서 PER경로 IC12 0.036→0.051, 연도별 7/8 양수 (8% 이상은 안정성 저하)
+     * - 세율 상한: 일회성 세금으로 인한 과도한 할인 방지
      */
-    private static final BigDecimal NORMALIZED_DEBT_RATE_V9 = new BigDecimal("0.06");
 
     /**
      * V8: 적정가 계산
@@ -457,6 +454,14 @@ public class PerShareValueCalculationService {
      * - 근거: test/backtest-v8-2026-10 (2018~2025 백테스트, PER경로 IC12 0.012 → 0.037)
      */
     public String calPerValueV9(CompanySharePriceCalculator req, CompanySharePriceResultDetail resultDetail, String sector) {
+        return calPerValueV9(req, resultDetail, sector, ValuationConstants.US);
+    }
+
+    /**
+     * V9: 시장별 상수로 계산 (국내 = ValuationConstants.KR). 계산식은 시장과 무관하게 같다
+     */
+    public String calPerValueV9(CompanySharePriceCalculator req, CompanySharePriceResultDetail resultDetail, String sector,
+                                ValuationConstants constants) {
 
         if(log.isDebugEnabled()) log.debug("[V9] CompanySharePriceCalculator = {}", req);
         if(log.isDebugEnabled()) log.debug("[V9] Sector = {}", sector);
@@ -468,7 +473,7 @@ public class PerShareValueCalculationService {
         if (sectorParams.isUsePbrValuation()
                 && !StringUtil.isStringEmpty(req.getBookValuePerShare())
                 && !StringUtil.isStringEmpty(req.getRoe())) {
-            return calPerValueV9_Financial(req, resultDetail, sector, sectorParams);
+            return calPerValueV9_Financial(req, resultDetail, sector, sectorParams, constants);
         }
 
         final String per = req.getPer();
@@ -646,7 +651,7 @@ public class PerShareValueCalculationService {
             }
 
             // V9 자기자본법: PER(순이익 배수)에 맞춰 이자·세금 차감 후 곱함
-            String afterTaxEarnings = calAfterTaxEarningsV9(operatingProfitAvg, req, resultDetail);
+            String afterTaxEarnings = calAfterTaxEarningsV9(operatingProfitAvg, req, resultDetail, constants);
             STEP01 = CalUtil.multi(afterTaxEarnings, adjustedPER);
             equityMethod = true;
         }
@@ -759,7 +764,7 @@ public class PerShareValueCalculationService {
      * - targetPBR 상한: 서브섹터별 (은행 1.8, 보험 2.0, 기타 2.5)
      */
     String calPerValueV9_Financial(CompanySharePriceCalculator req, CompanySharePriceResultDetail resultDetail,
-                                          String sector, SectorCalculationParameters sectorParams) {
+                                          String sector, SectorCalculationParameters sectorParams, ValuationConstants constants) {
 
         resultDetail.setPBR기반평가(true);
 
@@ -802,9 +807,10 @@ public class PerShareValueCalculationService {
             }
         }
 
-        // COE = riskFreeRate + Beta × marketRiskPremium
-        BigDecimal coe = sectorParams.getRiskFreeRate().add(
-                beta.multiply(sectorParams.getMarketRiskPremium()));
+        // COE = riskFreeRate + Beta × marketRiskPremium (시장 상수가 있으면 우선, 없으면 섹터 값 — US 는 섹터 값)
+        BigDecimal riskFreeRate = constants.riskFreeRate() != null ? constants.riskFreeRate() : sectorParams.getRiskFreeRate();
+        BigDecimal marketRiskPremium = constants.marketRiskPremium() != null ? constants.marketRiskPremium() : sectorParams.getMarketRiskPremium();
+        BigDecimal coe = riskFreeRate.add(beta.multiply(marketRiskPremium));
         resultDetail.setCOE(coe.setScale(4, RoundingMode.HALF_UP).toPlainString());
 
         // targetPBR = cappedROE / COE (서브섹터별 범위 제한)
@@ -865,27 +871,27 @@ public class PerShareValueCalculationService {
     /**
      * V9: 세후 이익 = max(0, 영업이익 − 이자비용) × (1 − 세율)
      * - 이자비용: max(실제 이자비용, 총부채 × 정상금리 6%) — 저금리·리스 부채 과소반영 방지
-     * - 세율: 최근 연간 유효세율, 없거나 비정상(세전손실 등)이면 미국 법정세율 21%, 상한 35%
+     * - 세율: 최근 연간 유효세율, 없거나 비정상(세전손실 등)이면 시장 기본세율(미국 21%·국내 26.4%), 상한 35%
      */
     private String calAfterTaxEarningsV9(String operatingProfit, CompanySharePriceCalculator req,
-                                         CompanySharePriceResultDetail resultDetail) {
-        BigDecimal normalizedInterest = parseNonNegativeV9(req.getTotalDebt()).multiply(NORMALIZED_DEBT_RATE_V9);
+                                         CompanySharePriceResultDetail resultDetail, ValuationConstants constants) {
+        BigDecimal normalizedInterest = parseNonNegativeV9(req.getTotalDebt()).multiply(constants.normalizedDebtRate());
         BigDecimal interest = parseNonNegativeV9(req.getInterestExpense()).max(normalizedInterest);
-        BigDecimal taxRate = resolveTaxRateV9(req.getEffectiveTaxRate());
+        BigDecimal taxRate = resolveTaxRateV9(req.getEffectiveTaxRate(), constants);
         BigDecimal pretax = new BigDecimal(operatingProfit).subtract(interest).max(BigDecimal.ZERO);
         resultDetail.set이자비용(interest.toPlainString());
         resultDetail.set적용세율(taxRate.toPlainString());
         return pretax.multiply(BigDecimal.ONE.subtract(taxRate)).toPlainString();
     }
 
-    private BigDecimal resolveTaxRateV9(String effectiveTaxRate) {
-        if (StringUtil.isStringEmpty(effectiveTaxRate)) return DEFAULT_TAX_RATE_V9;
+    private BigDecimal resolveTaxRateV9(String effectiveTaxRate, ValuationConstants constants) {
+        if (StringUtil.isStringEmpty(effectiveTaxRate)) return constants.defaultTaxRate();
         try {
             BigDecimal rate = new BigDecimal(effectiveTaxRate);
-            if (rate.signum() < 0) return DEFAULT_TAX_RATE_V9;
-            return rate.min(MAX_TAX_RATE_V9);
+            if (rate.signum() < 0) return constants.defaultTaxRate();
+            return rate.min(constants.maxTaxRate());
         } catch (NumberFormatException e) {
-            return DEFAULT_TAX_RATE_V9;
+            return constants.defaultTaxRate();
         }
     }
 
