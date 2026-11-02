@@ -1,5 +1,6 @@
 package com.finance.dart.api.common.service;
 
+import com.finance.dart.api.common.constants.Market;
 import com.finance.dart.api.common.entity.EvaluationHistoryEntity;
 import com.finance.dart.api.common.dto.evaluation.StockEvaluationResponse;
 import com.finance.dart.api.common.repository.EvaluationHistoryRepository;
@@ -29,18 +30,19 @@ public class EvaluationHistoryService {
     /**
      * 평가 스냅샷 저장 (같은 날 재평가는 교체 = 멱등)
      * - ERROR 응답(평가 실패)은 제외
+     * @param market 시장 (그 시장의 같은 날 스냅샷만 교체 — 다른 시장 이력은 건드리지 않음)
      * @param responses 평가 결과 리스트
      * @param symbolProfiles 심볼 → 추천한 프로파일명 목록 (평가 응답 심볼은 요청 심볼 그대로라 그대로 조회, 없으면 태그 null)
      * @param symbolRoe 심볼 → ROE TTM (투자 순위 점수용, 없으면 그 종목 순위 점수 null)
      * @return 저장된 종목 수
      */
     @Transactional
-    public int saveSnapshot(List<StockEvaluationResponse> responses, Map<String, List<String>> symbolProfiles,
+    public int saveSnapshot(Market market, List<StockEvaluationResponse> responses, Map<String, List<String>> symbolProfiles,
                             Map<String, Double> symbolRoe) {
         LocalDate today = LocalDate.now();
 
         // 벌크 DELETE 즉시 실행 → 이어지는 insert보다 먼저 (Hibernate insert-before-delete 순서 이슈 회피)
-        evaluationHistoryRepository.deleteSnapshot(today);
+        evaluationHistoryRepository.deleteSnapshot(today, market);
 
         List<EvaluationHistoryEntity> entities = new ArrayList<>();
         for (StockEvaluationResponse r : responses) {
@@ -49,6 +51,7 @@ public class EvaluationHistoryService {
 
             EvaluationHistoryEntity e = new EvaluationHistoryEntity();
             e.setSnapshotDate(today);
+            e.setMarket(market);
             e.setSymbol(r.getSymbol());
             e.setCompanyName(r.getCompanyName());
             e.setSector(r.getSector());
@@ -76,23 +79,23 @@ public class EvaluationHistoryService {
         InvestmentRankScorer.assign(entities);
 
         evaluationHistoryRepository.saveAll(entities);
-        log.info("[평가 이력] DB 저장 완료 - 일자: {}, 종목 수: {} (평가 실패 제외)", today, entities.size());
+        log.info("[평가 이력] DB 저장 완료 - {} 일자: {}, 종목 수: {} (평가 실패 제외)", market, today, entities.size());
         return entities.size();
     }
 
     /**
-     * 특정 일자 평가 이력 조회 (없으면 최신 일자)
+     * 특정 일자·시장 평가 이력 조회 (없으면 그 시장 최신 일자)
      */
     @Transactional(readOnly = true)
-    public List<EvaluationHistoryEntity> getSnapshot(LocalDate date) {
+    public List<EvaluationHistoryEntity> getSnapshot(LocalDate date, Market market) {
         LocalDate target = date;
         if (target == null) {
-            target = evaluationHistoryRepository.findFirstByOrderBySnapshotDateDesc()
+            target = evaluationHistoryRepository.findFirstByMarketOrderBySnapshotDateDesc(market)
                     .map(EvaluationHistoryEntity::getSnapshotDate)
                     .orElse(null);
         }
         if (target == null) return new ArrayList<>();
-        return evaluationHistoryRepository.findBySnapshotDate(target);
+        return evaluationHistoryRepository.findBySnapshotDateAndMarket(target, market);
     }
 
     private String joinProfiles(List<String> profiles) {

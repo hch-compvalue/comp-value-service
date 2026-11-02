@@ -58,17 +58,31 @@ public class KrValuationService {
         this.models = modelList.stream().collect(Collectors.toMap(KrValuationModel::version, Function.identity()));
     }
 
+    /** 계산 결과 + 입력 (6단계 평가가 베타·시총·업종을 함께 쓴다) */
+    public record Valuation(CompanySharePriceResult result, KrValuationInputBuilder.Input input) {
+        public boolean excluded() {
+            return input.excluded() != null;
+        }
+    }
+
     /**
      * @param refresh true 면 캐시를 무시하고 다시 계산
      */
     public CompanySharePriceResult calculate(String stockCode, boolean refresh) {
-        KrValuationModel model = models.get(ACTIVE_MODEL);
-        String cacheKey = RedisKeyGenerator.genDomesticCompValueRstData(stockCode, model.version());
+        String cacheKey = RedisKeyGenerator.genDomesticCompValueRstData(stockCode, models.get(ACTIVE_MODEL).version());
         if (!refresh) {
             String cached = redisComponent.getValue(cacheKey);
             if (!StringUtil.isStringEmpty(cached)) return new Gson().fromJson(cached, CompanySharePriceResult.class);
         }
+        return compute(stockCode).result();
+    }
 
+    /**
+     * 캐시 없이 계산 (결과는 캐시에 저장) — 계산 제외면 result 에 사유만
+     */
+    public Valuation compute(String stockCode) {
+        KrValuationModel model = models.get(ACTIVE_MODEL);
+        String cacheKey = RedisKeyGenerator.genDomesticCompValueRstData(stockCode, model.version());
         KrValuationInputBuilder.Input input = inputBuilder.build(stockCode, LocalDate.now(ZONE));
         CompanySharePriceResult result = new CompanySharePriceResult();
         result.set기업심볼(stockCode);
@@ -78,7 +92,7 @@ public class KrValuationService {
         if (input.excluded() != null) {
             result.set결과메시지("계산 제외: " + input.excluded());
             result.set상세정보(input.detail());
-            return result;     // 데이터가 갖춰지면 바로 다시 계산되도록 캐시하지 않는다
+            return new Valuation(result, input);     // 데이터가 갖춰지면 바로 다시 계산되도록 캐시하지 않는다
         }
 
         String sector = input.sector().sector();
@@ -109,9 +123,9 @@ public class KrValuationService {
         result.set상세정보(detail);
 
         redisComponent.saveValueWithTtl(cacheKey, new Gson().toJson(result), CACHE_HOURS, TimeUnit.HOURS);
-        log.info("[국내 계산] {} {} 적정가 {} (현재가 {}, 섹터 {}, KSIC {})", stockCode, result.get기업명(), fairValue,
+        if (log.isDebugEnabled()) log.debug("[국내 계산] {} {} 적정가 {} (현재가 {}, 섹터 {}, KSIC {})", stockCode, result.get기업명(), fairValue,
                 result.get현재가격(), sector, input.sector().ksicClass());
-        return result;
+        return new Valuation(result, input);
     }
 
     /** 미국 US_StockCalHelper.setRstDetailContextData 와 같은 항목 (계산 중 RequestContext 에 남긴 중간값) */

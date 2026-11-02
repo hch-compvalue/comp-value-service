@@ -1,5 +1,9 @@
 package com.finance.dart.api.common.service;
 
+import com.finance.dart.api.domestic.enums.KrExchange;
+import com.finance.dart.api.domestic.valuation.KrPriceSeries;
+import com.finance.dart.api.domestic.repository.KrPriceJdbcRepository;
+import com.finance.dart.api.common.constants.Market;
 import com.finance.dart.api.abroad.dto.fmp.chart.StockPriceVolumeReqDto;
 import com.finance.dart.api.abroad.dto.fmp.chart.StockPriceVolumeResDto;
 import com.finance.dart.api.abroad.service.fmp.StockPriceVolumeService;
@@ -63,6 +67,8 @@ public class EvaluationPerformanceService {
 
     /** 비교 기준 지수 ETF */
     static final String BENCHMARK_SYMBOL = "SPY";
+    /** 국내 기준 지수 (tb_kr_index_daily 의 KOSPI — 국내 스냅샷도 전 거래일 종가 기준이라 같은 1일 시차 규칙) */
+    static final String KR_BENCHMARK_SYMBOL = "KOSPI";
 
     /**
      * 스냅샷일 → 비교할 SPY 종가일 오프셋.
@@ -106,6 +112,7 @@ public class EvaluationPerformanceService {
 
     private final EvaluationHistoryRepository evaluationHistoryRepository;
     private final StockPriceVolumeService stockPriceVolumeService;
+    private final KrPriceJdbcRepository krPriceRepository;
 
     /** 큰 변동의 성격 판정 결과 */
     enum PriceMoveVerdict {
@@ -122,11 +129,11 @@ public class EvaluationPerformanceService {
      *          "baselineCount", "unmatchedCount", "unmatchedPct", "noBasePriceCount", "profileTagged"}
      */
     @Transactional(readOnly = true)
-    public Map<String, Object> computePerformance(LocalDate fromDate) {
+    public Map<String, Object> computePerformance(LocalDate fromDate, Market market) {
         Map<String, Object> result = new LinkedHashMap<>();
 
-        List<EvaluationHistoryEntity> baseline = evaluationHistoryRepository.findBySnapshotDate(fromDate);
-        LocalDate latestDate = evaluationHistoryRepository.findFirstByOrderBySnapshotDateDesc()
+        List<EvaluationHistoryEntity> baseline = evaluationHistoryRepository.findBySnapshotDateAndMarket(fromDate, market);
+        LocalDate latestDate = evaluationHistoryRepository.findFirstByMarketOrderBySnapshotDateDesc(market)
                 .map(EvaluationHistoryEntity::getSnapshotDate)
                 .orElse(null);
 
@@ -148,13 +155,13 @@ public class EvaluationPerformanceService {
         }
 
         Map<String, EvaluationHistoryEntity> latestBySymbol = new HashMap<>();
-        for (EvaluationHistoryEntity e : evaluationHistoryRepository.findBySnapshotDate(latestDate)) {
+        for (EvaluationHistoryEntity e : evaluationHistoryRepository.findBySnapshotDateAndMarket(latestDate, market)) {
             latestBySymbol.put(e.getSymbol(), e);
         }
 
         long elapsedDays = Math.max(MIN_ELAPSED_DAYS, ChronoUnit.DAYS.between(fromDate, latestDate));
-        Double benchmarkPct = fetchBenchmarkReturnPct(fromDate, latestDate);
-        result.put("benchmarkSymbol", BENCHMARK_SYMBOL);
+        Double benchmarkPct = market == Market.KR ? krBenchmarkReturnPct(fromDate, latestDate) : fetchBenchmarkReturnPct(fromDate, latestDate);
+        result.put("benchmarkSymbol", market == Market.KR ? KR_BENCHMARK_SYMBOL : BENCHMARK_SYMBOL);
         result.put("benchmarkReturnPct", benchmarkPct);
         result.put("largeMoveThresholdPct", round2(largeMoveThresholdPct(elapsedDays)));
         result.putAll(computeTrackingStats(baseline, latestBySymbol));
@@ -254,6 +261,19 @@ public class EvaluationPerformanceService {
             }
         }
         return null;
+    }
+
+    /** 국내 벤치마크: 저장된 KOSPI 일봉으로 같은 규칙의 수익률 */
+    Double krBenchmarkReturnPct(LocalDate fromDate, LocalDate latestDate) {
+        List<StockPriceVolumeResDto> prices = new ArrayList<>();
+        for (KrPriceSeries.DailyClose c : krPriceRepository.findIndexCloses(KrExchange.KOSPI.getIndexCode(),
+                fromDate.minusDays(BENCHMARK_LOOKBACK_PAD_DAYS))) {
+            StockPriceVolumeResDto p = new StockPriceVolumeResDto();
+            p.setDate(c.date().toString());
+            p.setClose(c.close());
+            prices.add(p);
+        }
+        return benchmarkReturnPct(prices, fromDate, latestDate);
     }
 
     /** 가격 이력에서 두 스냅샷일에 대응하는 종가로 수익률 (%) 계산. 대응 종가가 없으면 null */

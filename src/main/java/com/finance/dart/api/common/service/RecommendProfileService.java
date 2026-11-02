@@ -1,5 +1,6 @@
 package com.finance.dart.api.common.service;
 
+import com.finance.dart.api.common.constants.Market;
 import com.finance.dart.api.common.dto.RecommendProfileDto;
 import com.finance.dart.api.common.entity.RecommendProfileConfigEntity;
 import com.finance.dart.api.common.entity.RecommendProfileEntity;
@@ -123,10 +124,10 @@ public class RecommendProfileService {
     }
 
     /**
-     * 프로파일 목록 조회 (전체)
+     * 시장별 프로파일 목록 조회
      */
-    public List<RecommendProfileDto> getProfileList() {
-        List<RecommendProfileEntity> profileList = profileRepository.findAllByOrderBySortOrder();
+    public List<RecommendProfileDto> getProfileList(Market market) {
+        List<RecommendProfileEntity> profileList = profileRepository.findAllByMarketOrderBySortOrder(market);
 
         return profileList.stream()
                 .map(profile -> {

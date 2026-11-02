@@ -1,5 +1,6 @@
 package com.finance.dart.api.common.controller;
 
+import com.finance.dart.api.common.constants.Market;
 import com.finance.dart.api.abroad.service.US_StockCalFromFpmService;
 import com.finance.dart.api.common.dto.CompanySharePriceCalculator;
 import com.finance.dart.api.common.dto.CompanySharePriceResult;
@@ -163,14 +164,15 @@ public class MainController {
     @TransactionLogging
     @GetMapping("/evaluation/daily")
     public ResponseEntity<CommonResponse<List<EvaluationHistoryEntity>>> getDailyEvaluation(
-            @RequestParam(value = "date", required = false) String date) {
+            @RequestParam(value = "date", required = false) String date,
+            @RequestParam(value = "market", defaultValue = "US") Market market) {
 
         java.time.LocalDate targetDate = null;
         if (date != null && !date.isEmpty()) {
             targetDate = java.time.LocalDate.parse(date);
         }
 
-        List<EvaluationHistoryEntity> list = evaluationHistoryService.getSnapshot(targetDate);
+        List<EvaluationHistoryEntity> list = evaluationHistoryService.getSnapshot(targetDate, market);
 
         // 투자판정 우선순위 → 가치점수 내림차순 정렬
         list.sort(Comparator
@@ -190,10 +192,11 @@ public class MainController {
     @TransactionLogging
     @GetMapping("/evaluation/performance")
     public ResponseEntity<CommonResponse<Map<String, Object>>> getEvaluationPerformance(
-            @RequestParam("from") String from) {
+            @RequestParam("from") String from,
+            @RequestParam(value = "market", defaultValue = "US") Market market) {
 
         java.time.LocalDate fromDate = java.time.LocalDate.parse(from);
-        Map<String, Object> result = evaluationPerformanceService.computePerformance(fromDate);
+        Map<String, Object> result = evaluationPerformanceService.computePerformance(fromDate, market);
 
         return new ResponseEntity<>(new CommonResponse<>(result), HttpStatus.OK);
     }

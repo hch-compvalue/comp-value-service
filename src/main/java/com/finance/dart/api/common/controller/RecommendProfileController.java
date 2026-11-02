@@ -1,5 +1,6 @@
 package com.finance.dart.api.common.controller;
 
+import com.finance.dart.api.common.constants.Market;
 import com.finance.dart.api.common.dto.RecommendProfileDto;
 import com.finance.dart.api.common.service.RecommendProfileService;
 import com.finance.dart.common.config.EndPointConfig;
@@ -69,9 +70,10 @@ public class RecommendProfileController {
      */
     @TransactionLogging
     @GetMapping("")
-    public ResponseEntity<CommonResponse<List<RecommendProfileDto>>> getProfileList() {
+    public ResponseEntity<CommonResponse<List<RecommendProfileDto>>> getProfileList(
+            @RequestParam(value = "market", defaultValue = "US") Market market) {
 
-        List<RecommendProfileDto> result = recommendProfileService.getProfileList();
+        List<RecommendProfileDto> result = recommendProfileService.getProfileList(market);
 
         return new ResponseEntity<>(new CommonResponse<>(result), HttpStatus.OK);
     }

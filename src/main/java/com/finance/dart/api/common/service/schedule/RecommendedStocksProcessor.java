@@ -1,5 +1,6 @@
 package com.finance.dart.api.common.service.schedule;
 
+import com.finance.dart.api.common.constants.Market;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.finance.dart.api.abroad.dto.fmp.incomestatgrowth.IncomeStatGrowthResDto;
@@ -64,7 +65,7 @@ public class RecommendedStocksProcessor {
         try {
             // 1. 활성화된 프로파일 조회
             List<RecommendProfileEntity> activeProfiles = recommendProfileRepository
-                    .findByIsActiveOrderBySortOrder("Y");
+                    .findByIsActiveAndMarketOrderBySortOrder("Y", Market.US);
 
             if (activeProfiles == null || activeProfiles.isEmpty()) {
                 log.warn("[추천 종목] 활성화된 프로파일이 없습니다.");
@@ -558,7 +559,7 @@ public class RecommendedStocksProcessor {
      * - PER이 없거나 0 이하(적자)인 종목은 후순위
      * - quotaPct가 NULL이거나 0 이하/100 이상이면 미적용
      */
-    static Map<String, RecommendedStockData> applySectorQuota(
+    public static Map<String, RecommendedStockData> applySectorQuota(
             Map<String, RecommendedStockData> stocks, Integer quotaPct) {
 
         if (quotaPct == null || quotaPct <= 0 || quotaPct >= 100 || stocks.isEmpty()) {

@@ -1,5 +1,6 @@
 package com.finance.dart.api.common.service;
 
+import com.finance.dart.api.common.constants.Market;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.finance.dart.api.common.entity.RecommendHistoryEntity;
 import com.finance.dart.api.common.repository.RecommendHistoryRepository;
@@ -37,6 +38,14 @@ public class RecommendHistoryService {
      */
     @Transactional
     public void saveSnapshot(String profileName, Map<String, RecommendedStockData> stocks) {
+        saveSnapshot(profileName, stocks, Market.US);
+    }
+
+    /**
+     * @param market 시장 (국내 프로파일은 이름이 달라 같은 날 삭제 범위가 겹치지 않는다)
+     */
+    @Transactional
+    public void saveSnapshot(String profileName, Map<String, RecommendedStockData> stocks, Market market) {
         LocalDate today = LocalDate.now();
 
         // 같은 날 동일 프로파일 기존 스냅샷 제거 (멱등 보장)
@@ -48,6 +57,7 @@ public class RecommendHistoryService {
             RecommendHistoryEntity entity = new RecommendHistoryEntity();
             entity.setSnapshotDate(today);
             entity.setProfileName(profileName);
+            entity.setMarket(market);
             entity.setSymbol(data.symbol());
             entity.setCompanyName(data.companyName());
             entity.setPrice(data.price() != null ? BigDecimal.valueOf(data.price()) : null);

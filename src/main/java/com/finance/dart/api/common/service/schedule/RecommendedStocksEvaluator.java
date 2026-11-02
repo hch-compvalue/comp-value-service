@@ -1,5 +1,6 @@
 package com.finance.dart.api.common.service.schedule;
 
+import com.finance.dart.api.common.constants.Market;
 import com.finance.dart.api.common.context.SimpleRequestAttributes;
 import com.finance.dart.api.common.dto.evaluation.StockEvaluationRequest;
 import com.finance.dart.api.common.dto.evaluation.StockEvaluationResponse;
@@ -78,7 +79,7 @@ public class RecommendedStocksEvaluator {
             }
 
             // 3. 평가 이력 영속화 (ERROR 제외는 서비스에서 처리)
-            int saved = evaluationHistoryService.saveSnapshot(allResponses, symbolProfiles, candidates.roe());
+            int saved = evaluationHistoryService.saveSnapshot(Market.US, allResponses, symbolProfiles, candidates.roe());
             log.info("[전수 평가] 완료 - 평가 {}건, 저장 {}건", allResponses.size(), saved);
             return saved;
 
@@ -116,7 +117,7 @@ public class RecommendedStocksEvaluator {
         Map<String, List<String>> symbolProfiles = new LinkedHashMap<>();
         Map<String, Double> symbolRoe = new HashMap<>();
         List<RecommendProfileEntity> activeProfiles =
-                recommendProfileRepository.findByIsActiveOrderBySortOrder("Y");
+                recommendProfileRepository.findByIsActiveAndMarketOrderBySortOrder("Y", Market.US);
         if (activeProfiles == null) return new Candidates(symbolProfiles, symbolRoe);
 
         for (RecommendProfileEntity profile : activeProfiles) {

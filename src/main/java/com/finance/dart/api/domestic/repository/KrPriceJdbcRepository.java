@@ -48,6 +48,9 @@ public class KrPriceJdbcRepository {
 
     private static final String SELECT_DAILY_CLOSES =
             "SELECT trade_date, close_price FROM tb_kr_daily_price WHERE stock_code = ? AND trade_date >= ? ORDER BY trade_date";
+    private static final String SELECT_DAILY_BARS =
+            "SELECT trade_date, open_price, high_price, low_price, close_price, volume, trade_amount FROM tb_kr_daily_price "
+                    + "WHERE stock_code = ? AND trade_date >= ? ORDER BY trade_date";
     private static final String SELECT_INDEX_CLOSES =
             "SELECT trade_date, close_value FROM tb_kr_index_daily WHERE index_code = ? AND trade_date >= ? ORDER BY trade_date";
 
@@ -57,6 +60,12 @@ public class KrPriceJdbcRepository {
     public List<KrPriceSeries.DailyClose> findDailyCloses(String stockCode, LocalDate from) {
         return jdbcTemplate.query(SELECT_DAILY_CLOSES, (rs, i) ->
                 new KrPriceSeries.DailyClose(rs.getDate(1).toLocalDate(), rs.getInt(2)), stockCode, Date.valueOf(from));
+    }
+
+    /** 종목 일봉 OHLCV (from 이후, 날짜 오름차순) — 6단계 평가의 기술적 분석용 */
+    public List<KrDailyBar> findDailyBars(String stockCode, LocalDate from) {
+        return jdbcTemplate.query(SELECT_DAILY_BARS, (rs, i) -> new KrDailyBar(rs.getDate(1).toLocalDate(),
+                rs.getInt(2), rs.getInt(3), rs.getInt(4), rs.getInt(5), rs.getLong(6), rs.getLong(7)), stockCode, Date.valueOf(from));
     }
 
     /** 지수 종가 (from 이후, 날짜 오름차순) */

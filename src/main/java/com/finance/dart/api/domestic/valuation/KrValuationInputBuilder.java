@@ -16,6 +16,7 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Function;
 
 /**
  * 국내 V9 계산 입력 조립 — 미국 getCalParamDataV9 와 같은 정의를 우리 DB(재무·일봉·종목)로 만든다
@@ -32,6 +33,7 @@ public class KrValuationInputBuilder {
 
     static final int REQUIRED_ANNUALS = 3;
     static final int PER_YEARS = 5;
+    static final int GROWTH_YEARS = 3;
     static final int PRICE_HISTORY_YEARS = 6;
     static final int SMA_SHORT = 50;
     static final int SMA_LONG = 200;
@@ -46,11 +48,23 @@ public class KrValuationInputBuilder {
     private final KrStockRepository stockRepository;
     private final KrFinancialReportRepository reportRepository;
     private final KrPriceJdbcRepository priceRepository;
+    private volatile MarketCache marketCache;
 
     /** 조립 결과 — excluded 가 있으면 계산하지 않는다 */
     public record Input(KrStockEntity stock, CompanySharePriceCalculator calParam, CompanySharePriceResultDetail detail,
                         KrSectorMapper.KrSector sector, Double pbr, Double beta, double price, LocalDate priceDate,
-                        String excluded, List<String> warnings) {}
+                        String excluded, List<String> warnings, ScreeningMetrics metrics) {}
+
+    /**
+     * 추천 1차 필터·투자 순위용 지표 (미국 FMP ratios-ttm·income-growth 와 같은 정의)
+     * @param marketCap        시가총액 (원)
+     * @param per              시총 ÷ 최근 4분기 지배주주 순이익 (적자면 음수, 없으면 null)
+     * @param roe              최근 4분기 순이익 ÷ 자본
+     * @param debtEquity       차입금(리스 포함) ÷ 자본
+     * @param avgRevenueGrowth 최근 3개 연도 매출 성장률 평균 (연간 보고서 2~4개로 계산, 1개 이하면 null)
+     */
+    public record ScreeningMetrics(long marketCap, Double per, Double pbr, Double roe, Double debtEquity,
+                                   Double avgRevenueGrowth, Double avgNetIncomeGrowth) {}
 
     public Input build(String stockCode, LocalDate asOf) {
         CompanySharePriceResultDetail detail = new CompanySharePriceResultDetail(KrValuationService.UNIT);
@@ -177,13 +191,47 @@ public class KrValuationInputBuilder {
         Double sma50 = prices.sma(SMA_SHORT), sma200 = prices.sma(SMA_LONG);
         if (sma50 != null) detail.setSMA50(String.valueOf(sma50));
         if (sma200 != null) detail.setSMA200(String.valueOf(sma200));
-        KrPriceSeries market = KrPriceSeries.of(priceRepository.findIndexCloses(KrExchange.KOSPI.getIndexCode(),
-                asOf.minusYears(PRICE_HISTORY_YEARS))).upTo(asOf);
+        KrPriceSeries market = marketSeries(asOf);
         Double beta = KrPriceSeries.beta(prices, market);
         if (beta != null) c.setBeta(String.valueOf(beta));
         else warnings.add("베타 계산 불가(월간 수익률 " + KrPriceSeries.BETA_MIN_MONTHS + "개월 미만)");
 
-        return new Input(stock, c, detail, sector, pbr, beta, price, prices.last().date(), null, warnings);
+        ScreeningMetrics metrics = new ScreeningMetrics(marketCap.longValue(),
+                ratioOrNull(marketCap, snap.ttmNetIncome()),
+                pbr,
+                equity != null && equity > 0 && snap.ttmNetIncome() != null ? snap.ttmNetIncome() / (double) equity : null,
+                equity != null && equity > 0 ? new BigDecimal(c.getTotalDebt()).doubleValue() / equity : null,
+                averageGrowth(annuals, KrFinancialReportEntity::getRevenueYtd),
+                averageGrowth(annuals, KrFinancialSnapshot::annualNetIncome));
+        return new Input(stock, c, detail, sector, pbr, beta, price, prices.last().date(), null, warnings, metrics);
+    }
+
+    /** KOSPI 시계열 — 전 종목 배치에서 종목마다 다시 읽지 않게 기준일별로 한 번만 조회 */
+    private KrPriceSeries marketSeries(LocalDate asOf) {
+        MarketCache cache = marketCache;
+        if (cache == null || !cache.asOf().equals(asOf)) {
+            cache = new MarketCache(asOf, KrPriceSeries.of(priceRepository.findIndexCloses(KrExchange.KOSPI.getIndexCode(),
+                    asOf.minusYears(PRICE_HISTORY_YEARS))).upTo(asOf));
+            marketCache = cache;
+        }
+        return cache.series();
+    }
+
+    private record MarketCache(LocalDate asOf, KrPriceSeries series) {}
+
+    /** 최근 3개 연도 성장률 평균 (사업보고서 최신순, (당기 − 전기) ÷ |전기|, 전기 0·null 은 건너뜀) */
+    static Double averageGrowth(List<KrFinancialReportEntity> annuals, Function<KrFinancialReportEntity, Long> field) {
+        List<Double> growths = new ArrayList<>();
+        for (int i = 0; i < Math.min(GROWTH_YEARS, annuals.size() - 1); i++) {
+            Long cur = field.apply(annuals.get(i)), prev = field.apply(annuals.get(i + 1));
+            if (cur == null || prev == null || prev == 0) continue;
+            growths.add((cur - prev) / (double) Math.abs(prev));
+        }
+        return growths.isEmpty() ? null : growths.stream().mapToDouble(Double::doubleValue).average().orElse(0);
+    }
+
+    private static Double ratioOrNull(BigDecimal numerator, Long denominator) {
+        return denominator == null || denominator == 0 ? null : numerator.doubleValue() / denominator;
     }
 
     /** 최근 5년 연간 PER 중 양수 평균 (결산기 말 종가 × 현재 주식수 ÷ 그해 순이익). 하나도 없으면 null */
@@ -225,7 +273,7 @@ public class KrValuationInputBuilder {
     }
 
     private static Input excluded(KrStockEntity stock, CompanySharePriceResultDetail detail, String reason) {
-        return new Input(stock, null, detail, null, null, null, 0, null, reason, List.of());
+        return new Input(stock, null, detail, null, null, null, 0, null, reason, List.of(), null);
     }
 
     private static String ratio(BigDecimal numerator, BigDecimal denominator) {

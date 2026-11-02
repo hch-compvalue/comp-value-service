@@ -13,7 +13,7 @@ import java.util.Set;
  * - 금융 판정 = KSIC 금융업(64~66) **이면서** 재무상태표에 유동/비유동 구분이 없을 때만
  *   (KSIC 649 '기타 금융업'에 LG·SK·CJ·GS 등 비금융 지주 70곳이 섞여 있음 — 금융회사는 유동 구분 없는 재무상태표를 쓴다.
  *    11-02 확인: 금융업 코드 회사 중 유동 구분 없음 = 은행·보험·증권·카드·캐피탈·금융지주, 있음 = 비금융 지주·NHN 등)
- *   유동 구분이 있으면 지주·기타로 보고 Industrials
+ *   유동 구분이 있으면 지주·기타로 보고 Industrials, 그중 기타 금융업(6409)은 지주회사 표시(holdingCompany — 4단계 매수후보 제외)
  * - 금융 세부: V9 금융 경로(PBR)가 industry 문자열의 bank / insurance 로 ROE 상한을 나눈다
  *   → 은행 6401, 보험 65xx, 그 외 Capital Markets. 은행지주는 KSIC가 기타 금융업이라 종목코드로 은행 지정
  * - 매핑 안 되는 업종은 sector = null (호출부가 경고를 남기고 기본 파라미터 사용)
@@ -26,6 +26,8 @@ public final class KrSectorMapper {
     static final String INDUSTRY_INSURANCE = "Insurance";
     static final String INDUSTRY_CAPITAL_MARKETS = "Capital Markets";
     private static final String KSIC_BANK = "6401";
+    /** KSIC 649 기타 금융업 — 유동 구분 있는 재무상태표면 비금융 지주(LG·SK·CJ·GS·롯데지주 등) */
+    private static final String KSIC_OTHER_FINANCE = "6409";
     private static final String KSIC_INSURANCE_DIVISION = "65";
     private static final int KSIC_PREFIX_LENGTH = 2;
     private static final int KSIC_CLASS_LENGTH = 4;
@@ -68,8 +70,12 @@ public final class KrSectorMapper {
         put("Real Estate", "68");
     }
 
-    /** 매핑 결과 (sector null = 매핑 안 됨) */
-    public record KrSector(String sector, String industry, String ksicClass) {}
+    /** 매핑 결과 (sector null = 매핑 안 됨, holdingCompany = 비금융 지주) */
+    public record KrSector(String sector, String industry, String ksicClass, boolean holdingCompany) {
+        KrSector(String sector, String industry, String ksicClass) {
+            this(sector, industry, ksicClass, false);
+        }
+    }
 
     private KrSectorMapper() {}
 
@@ -82,7 +88,8 @@ public final class KrSectorMapper {
         if (cls == null) return new KrSector(null, null, null);
         String division = cls.substring(0, KSIC_DIVISION_LENGTH);
         if (FINANCIAL_DIVISIONS.contains(division)) {
-            return classifiedBalanceSheet ? new KrSector(INDUSTRIALS, null, cls) : new KrSector(FINANCIAL, financialIndustry(cls), cls);
+            return classifiedBalanceSheet ? new KrSector(INDUSTRIALS, null, cls, KSIC_OTHER_FINANCE.equals(cls))
+                    : new KrSector(FINANCIAL, financialIndustry(cls), cls);
         }
         String sector = PREFIX_SECTOR.getOrDefault(cls, PREFIX_SECTOR.get(division));
         return new KrSector(sector, null, cls);

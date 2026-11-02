@@ -1,5 +1,6 @@
 package com.finance.dart.api.common.repository;
 
+import com.finance.dart.api.common.constants.Market;
 import com.finance.dart.api.common.entity.RecommendProfileEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
 
@@ -17,12 +18,12 @@ public interface RecommendProfileRepository extends JpaRepository<RecommendProfi
     Optional<RecommendProfileEntity> findByProfileName(String profileName);
 
     /**
-     * 활성화된 프로파일 조회 (스케줄러에서 사용)
+     * 시장별 활성 프로파일 조회 (스케줄러에서 사용 — 미국 배치가 국내 프로파일을 쓰지 않게 항상 시장 지정)
      */
-    List<RecommendProfileEntity> findByIsActiveOrderBySortOrder(String isActive);
+    List<RecommendProfileEntity> findByIsActiveAndMarketOrderBySortOrder(String isActive, Market market);
 
     /**
-     * 전체 프로파일 목록 조회 (정렬순서)
+     * 시장별 전체 프로파일 목록 (정렬순서)
      */
-    List<RecommendProfileEntity> findAllByOrderBySortOrder();
+    List<RecommendProfileEntity> findAllByMarketOrderBySortOrder(Market market);
 }

@@ -1,5 +1,6 @@
 package com.finance.dart.api.common.service;
 
+import com.finance.dart.api.common.dto.evaluation.EvaluationInputs;
 import com.finance.dart.api.abroad.dto.fmp.analystestimates.AnalystEstimatesReqDto;
 import com.finance.dart.api.abroad.dto.fmp.analystestimates.AnalystEstimatesResDto;
 import com.finance.dart.api.abroad.dto.fmp.chart.StockPriceVolumeReqDto;
@@ -126,6 +127,35 @@ public class StockEvaluationService {
         // 2. 기업 정보 조회
         CompanyProfileDataResDto profile = getCompanyProfile(symbol);
 
+        // 3. 평가 입력 조립 (FMP) → 시장 공통 점수 계산
+        if (result.get상세정보() == null) {
+            throw new IllegalStateException(symbol + " - 상세정보 없음 (재무데이터 부족)");
+        }
+        StockQuoteResDto stockQuote = fetchStockQuote(symbol);
+        List<StockPriceVolumeResDto> priceHistory = fetchPriceHistory(symbol);
+        AnalystEstimatesResDto estimates = fetchAnalystEstimates(symbol);
+        EvaluationInputs inputs = new EvaluationInputs(result,
+                profile != null ? profile.getSector() : "N/A",
+                profile != null ? profile.getIndustry() : "N/A",
+                profile != null ? profile.getBeta() : null,
+                profile != null ? profile.getExchange() : "N/A",
+                profile != null ? profile.getCountry() : "N/A",
+                profile != null ? profile.getMarketCap() : null,
+                profile != null && profile.getMarketCap() != null ? formatMarketCap(profile.getMarketCap()) : "N/A",
+                profile != null ? profile.getAverageVolume() : null,
+                stockQuote, priceHistory,
+                estimates != null ? estimates.getEstimatedEpsAvg() : null,
+                EvaluationConst.QUALITY_GATE_MICROCAP, false);
+        return evaluate(symbol, inputs);
+    }
+
+    /**
+     * 6단계 평가 점수 계산 (시장 공통 — 미국 FMP 입력 / 국내 DB 입력)
+     * @param symbol 심볼(국내는 종목코드)
+     * @param in 평가 입력
+     */
+    public StockEvaluationResponse evaluate(String symbol, EvaluationInputs in) {
+        CompanySharePriceResult result = in.result();
         // 3. Step 1~5 평가 수행
         CompanySharePriceResultDetail detail = result.get상세정보();
         if (detail == null) {
@@ -142,9 +172,9 @@ public class StockEvaluationService {
         double step4Score = evaluateStep4(detail, stepDetails);
         double step5Score = evaluateStep5(detail, result, currentPrice, stepDetails);
 
-        // 3-1. Step 6: 모멘텀/기술적 분석 (데이터 조회를 여기서 수행하여 타이밍 분석과 공유)
-        StockQuoteResDto stockQuote = fetchStockQuote(symbol);
-        List<StockPriceVolumeResDto> priceHistory = fetchPriceHistory(symbol);
+        // 3-1. Step 6: 모멘텀/기술적 분석 (입력의 시세·가격 이력을 타이밍 분석과 공유)
+        StockQuoteResDto stockQuote = in.stockQuote();
+        List<StockPriceVolumeResDto> priceHistory = in.priceHistory();
 
         double step6Score = evaluateStep6(symbol, detail, stepDetails, stockQuote, priceHistory);
 
@@ -214,11 +244,10 @@ public class StockEvaluationService {
         String forwardPer = null;
         String forwardPerWarning = null;
         try {
-            AnalystEstimatesResDto estimates = fetchAnalystEstimates(symbol);
-            if (estimates != null && estimates.getEstimatedEpsAvg() != null
-                    && estimates.getEstimatedEpsAvg() > 0
+            Double forwardEps = in.forwardEps();     // 국내는 추정치가 없어 null → 크로스체크 생략(감점 없음)
+            if (forwardEps != null && forwardEps > 0
                     && stockQuote != null && stockQuote.getPrice() != null) {
-                double fwdPer = stockQuote.getPrice() / estimates.getEstimatedEpsAvg();
+                double fwdPer = stockQuote.getPrice() / forwardEps;
                 forwardPer = String.format("%.2f", fwdPer);
 
                 String perStr = detail.getPER();
@@ -266,8 +295,9 @@ public class StockEvaluationService {
         String investmentSignal = resolveInvestmentSignal(valueGrade, timingSignal);
 
         // 6-2. [Fix1] 매수후보 품질 게이트 - 밸류에이션 계산 약점(초소형주/극단괴리/채권)이 매수후보로 새는 것 방지
-        Long marketCap = (profile != null) ? profile.getMarketCap() : null;
-        String gatedSignal = applyQualityGate(investmentSignal, marketCap, priceGapPercent, symbol, result.get기업명());
+        Long marketCap = in.marketCap();
+        String gatedSignal = applyQualityGate(investmentSignal, marketCap, priceGapPercent, symbol, result.get기업명(),
+                in.microcapThreshold(), in.holdingCompany());
         if (!gatedSignal.equals(investmentSignal)) {
             log.info("[QualityGate] {} - 투자판정 {} → {} (시총 {}, 괴리 {})",
                     symbol, investmentSignal, gatedSignal, marketCap, priceGapPercent);
@@ -292,14 +322,13 @@ public class StockEvaluationService {
                 .stopLossPrice(result.get손절매가())
                 .peg(detail.getPEG())
                 .per(detail.getPER())
-                .sector(profile != null ? profile.getSector() : "N/A")
-                .industry(profile != null ? profile.getIndustry() : "N/A")
-                .beta(profile != null && profile.getBeta() != null ? profile.getBeta().toString() : "N/A")
-                .exchange(profile != null ? profile.getExchange() : "N/A")
-                .country(profile != null ? profile.getCountry() : "N/A")
-                .marketCap(profile != null && profile.getMarketCap() != null ?
-                        formatMarketCap(profile.getMarketCap()) : "N/A")
-                .averageVolume(profile != null ? profile.getAverageVolume() : null)
+                .sector(in.sector())
+                .industry(in.industry())
+                .beta(in.beta() != null ? in.beta().toString() : "N/A")
+                .exchange(in.exchange())
+                .country(in.country())
+                .marketCap(in.marketCapText())
+                .averageVolume(in.averageVolume())
                 .step1Score(step1Score)
                 .step2Score(step2Score)
                 .step3Score(step3Score)
@@ -1009,6 +1038,15 @@ public class StockEvaluationService {
      */
     static String applyQualityGate(String signal, Long marketCap, String priceGapPercent,
                                     String symbol, String companyName) {
+        return applyQualityGate(signal, marketCap, priceGapPercent, symbol, companyName, EvaluationConst.QUALITY_GATE_MICROCAP, false);
+    }
+
+    /**
+     * @param microcapThreshold 초소형주 기준 (시장 통화 — 미국 $3억, 국내 1,000억 원)
+     * @param holdingCompany    지주회사 (국내 — 연결 영업이익에 자회사 이익이 지분과 무관하게 100% 들어가 적정가 과대 → 매수후보는 관심목록)
+     */
+    static String applyQualityGate(String signal, Long marketCap, String priceGapPercent,
+                                    String symbol, String companyName, long microcapThreshold, boolean holdingCompany) {
         double gap = parseGapPercent(priceGapPercent);  // NaN 가능
 
         // 1) 채권/특수증권 or 이상치 괴리 → 관망
@@ -1020,9 +1058,9 @@ public class StockEvaluationService {
 
         // 2) 매수후보 + 초소형주 or 극단괴리 → 관심목록
         if (EvaluationConst.INVEST_SIGNAL_BUY.equals(signal)) {
-            boolean isMicroCap = marketCap != null && marketCap < EvaluationConst.QUALITY_GATE_MICROCAP;
+            boolean isMicroCap = marketCap != null && marketCap < microcapThreshold;
             boolean isExtremeGap = !Double.isNaN(gap) && Math.abs(gap) >= EvaluationConst.QUALITY_GATE_UNREALISTIC_GAP_PCT;
-            if (isMicroCap || isExtremeGap) {
+            if (isMicroCap || isExtremeGap || holdingCompany) {
                 return EvaluationConst.INVEST_SIGNAL_WATCH;
             }
         }
