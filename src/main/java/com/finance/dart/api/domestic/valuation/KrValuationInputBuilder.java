@@ -78,7 +78,7 @@ public class KrValuationInputBuilder {
         if (latest.getTotalAssets() == null || latest.getTotalEquity() == null) return excluded(stock, detail, "재무상태표 자산·자본 없음");
         if (!balanced(latest)) return excluded(stock, detail, "재무상태표 합계 불일치(자산 ≠ 부채 + 자본)");
 
-        KrSectorMapper.KrSector sector = KrSectorMapper.map(stockCode, stock.getKsicCode());
+        KrSectorMapper.KrSector sector = KrSectorMapper.map(stockCode, stock.getKsicCode(), latest.getCurrentAssets() != null);
         if (sector.sector() == null) warnings.add("업종 매핑 안 됨(KSIC " + stock.getKsicCode() + ") — 기본 파라미터");
 
         CompanySharePriceCalculator c = new CompanySharePriceCalculator();

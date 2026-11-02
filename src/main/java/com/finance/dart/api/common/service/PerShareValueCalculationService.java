@@ -807,6 +807,9 @@ public class PerShareValueCalculationService {
             }
         }
 
+        // 시장별 베타 하한 (국내: 은행 베타가 지수 대비 지나치게 낮아 COE 과소 → 1.0 하한, US 는 없음)
+        if (constants.minCoeBeta() != null) beta = beta.max(constants.minCoeBeta());
+
         // COE = riskFreeRate + Beta × marketRiskPremium (시장 상수가 있으면 우선, 없으면 섹터 값 — US 는 섹터 값)
         BigDecimal riskFreeRate = constants.riskFreeRate() != null ? constants.riskFreeRate() : sectorParams.getRiskFreeRate();
         BigDecimal marketRiskPremium = constants.marketRiskPremium() != null ? constants.marketRiskPremium() : sectorParams.getMarketRiskPremium();
