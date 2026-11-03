@@ -49,11 +49,17 @@ public class KrEvaluationService {
 
     /** 이미 계산한 결과로 평가 (추천 배치 — 1차 필터에서 계산한 결과 재사용) */
     public Result evaluate(KrValuationService.Valuation v) {
+        return evaluate(v, LocalDate.now(ZONE));
+    }
+
+    /** 기준일 시점 평가 (백테스트) — 기준일 이후 일봉은 쓰지 않는다 */
+    public Result evaluate(KrValuationService.Valuation v, LocalDate asOf) {
         if (v.excluded()) return new Result(null, v.input().excluded(), null);
 
         KrValuationInputBuilder.Input in = v.input();
         String stockCode = in.stock().getStockCode();
-        List<KrDailyBar> bars = priceRepository.findDailyBars(stockCode, LocalDate.now(ZONE).minusDays(HISTORY_DAYS));
+        List<KrDailyBar> bars = priceRepository.findDailyBars(stockCode, asOf.minusDays(HISTORY_DAYS)).stream()
+                .filter(b -> !b.tradeDate().isAfter(asOf)).toList();
         long marketCap = BigDecimal.valueOf(in.price()).multiply(BigDecimal.valueOf(in.stock().getListedShares()))
                 .setScale(0, RoundingMode.HALF_UP).longValue();
 

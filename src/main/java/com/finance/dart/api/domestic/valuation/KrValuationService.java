@@ -86,9 +86,16 @@ public class KrValuationService {
      * 캐시 없이 계산 (결과는 캐시에 저장) — 계산 제외면 result 에 사유만
      */
     public Valuation compute(String stockCode) {
+        return compute(stockCode, LocalDate.now(ZONE));
+    }
+
+    /**
+     * 기준일 시점 계산 (백테스트) — 그날까지 접수된 재무·그날까지의 가격만. 오늘이 아니면 캐시에 저장하지 않는다
+     */
+    public Valuation compute(String stockCode, LocalDate asOf) {
         KrValuationModel model = models.get(ACTIVE_MODEL);
         String cacheKey = RedisKeyGenerator.genDomesticCompValueRstData(stockCode, model.version());
-        KrValuationInputBuilder.Input input = inputBuilder.build(stockCode, LocalDate.now(ZONE));
+        KrValuationInputBuilder.Input input = inputBuilder.build(stockCode, asOf);
         CompanySharePriceResult result = new CompanySharePriceResult();
         result.set기업심볼(stockCode);
         result.set주식코드(stockCode);
@@ -127,7 +134,7 @@ public class KrValuationService {
         result.set확인시간(DateUtil.getToday("yyyy-MM-dd HH:mm:ss"));
         result.set상세정보(detail);
 
-        redisComponent.saveValueWithTtl(cacheKey, new Gson().toJson(result), CACHE_HOURS, TimeUnit.HOURS);
+        if (asOf.equals(LocalDate.now(ZONE))) redisComponent.saveValueWithTtl(cacheKey, new Gson().toJson(result), CACHE_HOURS, TimeUnit.HOURS);
         if (log.isDebugEnabled()) log.debug("[국내 계산] {} {} 적정가 {} (현재가 {}, 섹터 {}, KSIC {})", stockCode, result.get기업명(), fairValue,
                 result.get현재가격(), sector, input.sector().ksicClass());
         return new Valuation(result, input);
