@@ -1,5 +1,6 @@
 package com.finance.dart.board.dto;
 
+import com.finance.dart.api.common.constants.Market;
 import lombok.Data;
 
 import java.util.List;
@@ -11,5 +12,6 @@ import java.util.List;
 public class TranRecordCurValueReqDto {
 
     private List<String> symbols; // 티커
+    private Market market;        // 시장 (없으면 US)
 
 }

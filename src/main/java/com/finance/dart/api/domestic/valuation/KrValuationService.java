@@ -69,12 +69,17 @@ public class KrValuationService {
      * @param refresh true 면 캐시를 무시하고 다시 계산
      */
     public CompanySharePriceResult calculate(String stockCode, boolean refresh) {
-        String cacheKey = RedisKeyGenerator.genDomesticCompValueRstData(stockCode, models.get(ACTIVE_MODEL).version());
         if (!refresh) {
-            String cached = redisComponent.getValue(cacheKey);
-            if (!StringUtil.isStringEmpty(cached)) return new Gson().fromJson(cached, CompanySharePriceResult.class);
+            CompanySharePriceResult cached = cachedResult(stockCode);
+            if (cached != null) return cached;
         }
         return compute(stockCode).result();
+    }
+
+    /** 캐시된 계산 결과 (없으면 null, 계산하지 않음) — 포트폴리오 목표가 동기화용 */
+    public CompanySharePriceResult cachedResult(String stockCode) {
+        String cached = redisComponent.getValue(RedisKeyGenerator.genDomesticCompValueRstData(stockCode, models.get(ACTIVE_MODEL).version()));
+        return StringUtil.isStringEmpty(cached) ? null : new Gson().fromJson(cached, CompanySharePriceResult.class);
     }
 
     /**

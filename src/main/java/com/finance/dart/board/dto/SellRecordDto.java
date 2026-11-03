@@ -1,5 +1,6 @@
 package com.finance.dart.board.dto;
 
+import com.finance.dart.api.common.constants.Market;
 import lombok.Data;
 
 /**
@@ -11,6 +12,7 @@ public class SellRecordDto {
     private Long id;                    // 매도기록ID
     // --- 거래 기록 정보
     private String symbol;              // 티커
+    private Market market;              // 시장 (US/KR — 등록 시 지정, 없으면 US)
     private String companyName;         // 기업명
 
     // --- 매도 정보

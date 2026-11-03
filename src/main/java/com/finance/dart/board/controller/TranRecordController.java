@@ -96,7 +96,7 @@ public class TranRecordController {
     public ResponseEntity<CommonResponse<TranRecordDto>> syncTargetPrice(HttpServletRequest request, @RequestBody TranRecordDto reqBody)
             throws Exception {
 
-        TranRecordDto response = tranRecordService.syncTargetPrice(request, reqBody.getSymbol());
+        TranRecordDto response = tranRecordService.syncTargetPrice(request, reqBody.getSymbol(), reqBody.getMarket());
 
         return new ResponseEntity<>(new CommonResponse<>(response), HttpStatus.OK);
     }
@@ -143,7 +143,7 @@ public class TranRecordController {
 
         Set<String> symbols = reqBody.getSymbols().stream().collect(Collectors.toSet());
 
-        List<TranRecordCurValueResDto> response = tranRecordService.getCurValues(symbols);
+        List<TranRecordCurValueResDto> response = tranRecordService.getCurValues(symbols, reqBody.getMarket());
 
         return new ResponseEntity<>(new CommonResponse<>(response), HttpStatus.OK);
     }

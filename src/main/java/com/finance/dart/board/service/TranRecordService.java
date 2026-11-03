@@ -17,6 +17,9 @@ import com.finance.dart.board.dto.TranRecordFxRateResDto;
 import com.finance.dart.board.entity.TranRecordEntity;
 import com.finance.dart.board.repository.TranRecordRepository;
 import com.finance.dart.api.common.constants.EvaluationConst;
+import com.finance.dart.api.common.constants.Market;
+import com.finance.dart.api.domestic.service.KrQuoteService;
+import com.finance.dart.api.domestic.valuation.KrValuationService;
 import com.finance.dart.api.common.dto.CompanySharePriceResult;
 import com.finance.dart.common.component.RedisComponent;
 import com.finance.dart.common.component.RedisKeyGenerator;
@@ -55,6 +58,8 @@ public class TranRecordService {
     private final AfterTradeService afterTradeService;                          // 애프터마켓 시세 조회 서비스
     private final US_StockCalFromFpmService usStockCalFromFpmService;           // 해외기업 주당가치 계산 서비스
     private final SymbolMemoService symbolMemoService;                          // 종목 메모 서비스
+    private final KrQuoteService krQuoteService;                                // 국내 현재가 (KIS)
+    private final KrValuationService krValuationService;                        // 국내 주당가치 계산
 
     private final Gson gson = new Gson();
 
@@ -117,7 +122,7 @@ public class TranRecordService {
 
         // 동기화 ON이면 Redis 목표매도가를 DB에도 저장 (캐시 만료 시 마지막 동기화 값 표시용)
         boolean sync = Boolean.TRUE.equals(data.getTargetPriceSync());
-        Double sellTarget = sync ? getSellTargetPrices(Set.of(data.getSymbol())).get(data.getSymbol()) : null;
+        Double sellTarget = sync ? getSellTargetPrices(Set.of(data.getSymbol()), marketOf(data)).get(data.getSymbol()) : null;
         if(sellTarget != null) data.setTargetPrice(sellTarget);
 
         TranRecordEntity savedEntity = tranRecordRepository.save(data);
@@ -178,34 +183,30 @@ public class TranRecordService {
         // 거래기록 조회
         List<TranRecordEntity> tranRecordEntityList = tranRecordRepository.findByMember_Id(memberId);
 
-        // 티커 분류 (중복 제거)
-        Set<String> uniqueTickers = new LinkedHashSet<>();
-        for(TranRecordEntity tranRecordEntity : tranRecordEntityList) {
-            uniqueTickers.add(tranRecordEntity.getSymbol());
+        // 시장별 티커 분류 (중복 제거) — 미국 FMP / 국내 KIS
+        Map<Market, Set<String>> tickersByMarket = new EnumMap<>(Market.class);
+        Map<Market, Set<String>> syncSymbolsByMarket = new EnumMap<>(Market.class);
+        for(TranRecordEntity entity : tranRecordEntityList) {
+            tickersByMarket.computeIfAbsent(marketOf(entity), k -> new LinkedHashSet<>()).add(entity.getSymbol());
+            if(Boolean.TRUE.equals(entity.getTargetPriceSync())) {
+                syncSymbolsByMarket.computeIfAbsent(marketOf(entity), k -> new LinkedHashSet<>()).add(entity.getSymbol());
+            }
         }
 
-        // 현재가 조회 (병렬 처리)
-        List<TranRecordCurValueResDto> curValues = getCurValues(uniqueTickers);
-
-        // 티커별 현재가 맵 구성
+        // 현재가 조회 → 티커별 현재가 맵 (시장이 달라도 티커 형식이 달라 겹치지 않는다: 미국 영문 / 국내 6자리 코드)
         Map<String, Double> tickerValueMap = new HashMap<>();
-        if(curValues != null) {
+        tickersByMarket.forEach((market, tickers) -> {
+            List<TranRecordCurValueResDto> curValues = getCurValues(tickers, market);
+            if(curValues == null) return;
             for(TranRecordCurValueResDto curValue : curValues) {
                 tickerValueMap.put(curValue.getSymbol(),
                     (curValue.getCurrentPrice() == null) ? 0.0 : curValue.getCurrentPrice());
             }
-        }
+        });
 
-        // 목표매도가 동기화 대상 심볼 수집
-        Set<String> syncSymbols = new LinkedHashSet<>();
-        for(TranRecordEntity entity : tranRecordEntityList) {
-            if(Boolean.TRUE.equals(entity.getTargetPriceSync())) {
-                syncSymbols.add(entity.getSymbol());
-            }
-        }
-
-        // Redis에서 목표매도가 조회 (심볼별 캐시)
-        Map<String, Double> sellTargetMap = getSellTargetPrices(syncSymbols);
+        // Redis에서 목표매도가 조회 (시장별 계산 캐시)
+        Map<String, Double> sellTargetMap = new HashMap<>();
+        syncSymbolsByMarket.forEach((market, symbols) -> sellTargetMap.putAll(getSellTargetPrices(symbols, market)));
 
         // 현재가 + 목표매도가 동기화 세팅
         List<TranRecordEntity> syncedEntityList = new ArrayList<>();
@@ -242,23 +243,27 @@ public class TranRecordService {
      * @param symbol
      * @return symbol, targetPrice(계산 실패 시 null), targetPriceCached
      */
-    public TranRecordDto syncTargetPrice(HttpServletRequest request, String symbol) throws Exception {
+    public TranRecordDto syncTargetPrice(HttpServletRequest request, String symbol, Market market) throws Exception {
 
         if(StringUtil.isStringEmpty(symbol)) throw new BizException("티커 정보가 존재하지 않습니다.");
 
         Member member = memberService.getLoginMember(request);
+        Market targetMarket = market == null ? Market.US : market;
 
-        Double sellTarget = parseSellTarget(usStockCalFromFpmService.calPerValue(symbol));
+        Double sellTarget = parseSellTarget(targetMarket == Market.KR
+                ? krValuationService.calculate(symbol, false)
+                : usStockCalFromFpmService.calPerValue(symbol));
 
         TranRecordDto resultDto = new TranRecordDto();
         resultDto.setSymbol(symbol);
+        resultDto.setMarket(targetMarket);
         resultDto.setTargetPrice(sellTarget);
         resultDto.setTargetPriceCached(sellTarget != null);
         if(sellTarget == null) return resultDto;
 
         List<TranRecordEntity> syncedEntityList = new ArrayList<>();
         for(TranRecordEntity entity : tranRecordRepository.findByMember_Id(member.getId())) {
-            if(symbol.equals(entity.getSymbol()) && Boolean.TRUE.equals(entity.getTargetPriceSync())
+            if(symbol.equals(entity.getSymbol()) && marketOf(entity) == targetMarket && Boolean.TRUE.equals(entity.getTargetPriceSync())
                     && !sellTarget.equals(entity.getTargetPrice())) {
                 entity.setTargetPrice(sellTarget);
                 syncedEntityList.add(entity);
@@ -290,7 +295,28 @@ public class TranRecordService {
     }
 
     /**
-     * 현재가격 조회(다건) - 병렬 처리 버전
+     * 현재가격 조회(다건) — 시장별 (US: FMP 병렬, KR: KIS 현재가 · 실패 시 저장 종가)
+     * @param market null 이면 US
+     */
+    public List<TranRecordCurValueResDto> getCurValues(Set<String> symbolSet, Market market) {
+        if (market != Market.KR) return getCurValues(symbolSet);
+        if (symbolSet == null || symbolSet.isEmpty()) return null;
+
+        String now = DateUtil.getToday("yyyy-MM-dd HH:mm:ss");
+        List<TranRecordCurValueResDto> result = new ArrayList<>();
+        krQuoteService.currentPrices(symbolSet).forEach((code, quote) -> {
+            TranRecordCurValueResDto dto = new TranRecordCurValueResDto();
+            dto.setSymbol(code);
+            dto.setCurrentPrice(quote.price() == null ? 0.0 : quote.price());
+            dto.setPreviousClose(quote.previousClose());
+            dto.setUpdatedAt(now);
+            result.add(dto);
+        });
+        return result;
+    }
+
+    /**
+     * 현재가격 조회(다건) - 병렬 처리 버전 (미국 FMP)
      * @param symbolSet
      * @return
      */
@@ -396,9 +422,17 @@ public class TranRecordService {
      * @param symbols 조회할 심볼 셋
      * @return 심볼별 목표매도가 맵
      */
-    private Map<String, Double> getSellTargetPrices(Set<String> symbols) {
+    private Map<String, Double> getSellTargetPrices(Set<String> symbols, Market market) {
         Map<String, Double> result = new HashMap<>();
         if(symbols == null || symbols.isEmpty()) return result;
+
+        if(market == Market.KR) {       // 국내: 국내 계산 캐시 (KrValuationService)
+            for(String symbol : symbols) {
+                Double sellTarget = parseSellTarget(krValuationService.cachedResult(symbol));
+                if(sellTarget != null) result.put(symbol, sellTarget);
+            }
+            return result;
+        }
 
         for(String symbol : symbols) {
             try {
@@ -429,6 +463,11 @@ public class TranRecordService {
             log.warn("심볼 {} 목표매도가 형식 오류: {}", priceResult.get기업심볼(), priceResult.get목표매도가());
             return null;
         }
+    }
+
+    /** 거래기록 시장 (기존 행 null 방어 — US) */
+    private static Market marketOf(TranRecordEntity entity) {
+        return entity.getMarket() == null ? Market.US : entity.getMarket();
     }
 
     /**

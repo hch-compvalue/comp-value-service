@@ -1,5 +1,6 @@
 package com.finance.dart.board.dto;
 
+import com.finance.dart.api.common.constants.Market;
 import lombok.Data;
 
 /**
@@ -11,6 +12,7 @@ public class TranRecordDto {
     private Long id;               // PK
 
     private String symbol;          // 티커
+    private Market market;          // 시장 (US/KR — 등록 시 지정, 없으면 US)
     private String companyName;     // 기업명
     private String buyDate;         // 매수일자
     private Double buyPrice;        // 매수가격(단가)
