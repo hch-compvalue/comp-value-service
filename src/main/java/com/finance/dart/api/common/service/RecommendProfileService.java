@@ -45,6 +45,7 @@ public class RecommendProfileService {
         profileEntity.setProfileDesc(dto.getProfileDesc());
         profileEntity.setIsActive(dto.getIsActive() != null ? dto.getIsActive() : "N");
         profileEntity.setSortOrder(dto.getSortOrder() != null ? dto.getSortOrder() : 0);
+        profileEntity.setMarket(dto.getMarket() != null ? dto.getMarket() : Market.US);
 
         RecommendProfileEntity savedProfile = profileRepository.save(profileEntity);
 
@@ -192,6 +193,7 @@ public class RecommendProfileService {
         dto.setProfileDesc(profile.getProfileDesc());
         dto.setIsActive(profile.getIsActive());
         dto.setSortOrder(profile.getSortOrder());
+        dto.setMarket(profile.getMarket());
         dto.setCreatedAt(profile.getCreatedAt() != null ? profile.getCreatedAt().toString() : null);
         dto.setUpdatedAt(profile.getUpdatedAt() != null ? profile.getUpdatedAt().toString() : null);
 
