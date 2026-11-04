@@ -24,7 +24,7 @@ import java.util.stream.Collectors;
 
 /**
  * 외부 API 헬스체크 서비스
- * - FMP, DART, KIS, Yahoo, Upbit, OpenAI 각각 경량 요청으로 UP/DOWN + 응답시간 측정
+ * - FMP, DART, KIS, Upbit, OpenAI 각각 경량 요청으로 UP/DOWN + 응답시간 측정
  * - KIS는 KisClient 로 한 번만 조회 (토큰은 trader 공유 토큰, 호출 한도는 KisRateLimiter 공유)
  * - 30초 주기로 호출 (rate limit 부담 최소화)
  * - RestTemplate 사용 (실제 API 호출과 동일한 HTTP 클라이언트)
@@ -37,16 +37,13 @@ public class ExternalApiHealthService {
     public static final String FMP = "FMP";
     public static final String DART = "DART";
     public static final String KIS = "KIS";
-    public static final String YAHOO = "Yahoo";
     public static final String UPBIT = "Upbit";
     public static final String OPENAI = "OpenAI";
     /** 확인 대상 (화면 표시 순서) */
-    public static final List<String> API_NAMES = List.of(FMP, DART, KIS, YAHOO, UPBIT, OPENAI);
+    public static final List<String> API_NAMES = List.of(FMP, DART, KIS, UPBIT, OPENAI);
 
     /** KIS 확인 종목: 삼성전자 현재가 */
     private static final Map<String, String> KIS_CHECK_PARAMS = Map.of("FID_COND_MRKT_DIV_CODE", "J", "FID_INPUT_ISCD", "005930");
-    /** Yahoo 는 브라우저 User-Agent 가 없으면 429 를 주므로 실제 호출(DomesticStockCalculationService)과 같은 값 */
-    private static final String BROWSER_USER_AGENT = "Mozilla/5.0";
 
     public static final String STATUS_UP = "UP";
     public static final String STATUS_DOWN = "DOWN";
@@ -134,7 +131,6 @@ public class ExternalApiHealthService {
             case FMP -> checkFmp();
             case DART -> checkDart();
             case KIS -> checkKis();
-            case YAHOO -> checkYahoo();
             case UPBIT -> checkUpbit();
             case OPENAI -> checkOpenAi();
             default -> ServiceStatusDto.builder().name(name).status(STATUS_DOWN).build();
@@ -179,12 +175,6 @@ public class ExternalApiHealthService {
         }
         return ServiceStatusDto.builder().name(KIS).status(status)
                 .uptime((System.currentTimeMillis() - start) + "ms").build();
-    }
-
-    private ServiceStatusDto checkYahoo() {
-        return timedCheckWithHeaders(YAHOO,
-                "https://query1.finance.yahoo.com/v8/finance/chart/005930.KS?range=1d&interval=1d",
-                HttpHeaders.USER_AGENT, BROWSER_USER_AGENT);
     }
 
     private static boolean isBlank(String s) {
