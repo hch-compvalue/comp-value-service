@@ -4,6 +4,7 @@ import com.finance.dart.api.abroad.dto.fmp.chart.StockPriceVolumeResDto;
 import com.finance.dart.api.abroad.dto.fmp.quote.StockQuoteResDto;
 import com.finance.dart.api.common.dto.evaluation.EvaluationInputs;
 import com.finance.dart.api.common.dto.evaluation.StockEvaluationResponse;
+import com.finance.dart.api.common.service.BenchmarkDrawdownService;
 import com.finance.dart.api.common.service.StockEvaluationService;
 import com.finance.dart.api.domestic.collect.KrDailyBar;
 import com.finance.dart.api.domestic.repository.KrPriceJdbcRepository;
@@ -39,6 +40,7 @@ public class KrEvaluationService {
     private final KrValuationService valuationService;
     private final StockEvaluationService stockEvaluationService;
     private final KrPriceJdbcRepository priceRepository;
+    private final BenchmarkDrawdownService benchmarkDrawdownService;   // 52주 하락률 시장 비교(표시용)
 
     /** 평가 결과 (계산 제외 종목은 response 없이 사유만) */
     public record Result(StockEvaluationResponse response, String excludedReason, Double roe) {}
@@ -78,6 +80,7 @@ public class KrEvaluationService {
                 MICROCAP_KRW,
                 in.sector().holdingCompany());
         StockEvaluationResponse response = stockEvaluationService.evaluate(stockCode, inputs);
+        benchmarkDrawdownService.applyKr(response, in.stock().getExchange(), asOf.minusDays(HISTORY_DAYS), asOf);
         return new Result(response, null, in.metrics().roe());
     }
 

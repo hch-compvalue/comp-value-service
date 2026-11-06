@@ -196,6 +196,15 @@ public class StockEvaluationResponse {
      */
     private String high52wDropPercent;
 
+    /** 비교 기준 지수 이름 (미국 S&P500(SPY), 국내 KOSPI·KOSDAQ) — 표시용, 조회 실패 시 null */
+    private String benchmarkName;
+
+    /** 같은 기간 기준 지수의 52주 고점 대비 하락률 (%) */
+    private String benchmarkHigh52wDropPercent;
+
+    /** 지수 대비 상대 하락률 (%) = (1+종목)/(1+지수) − 1. 음수면 시장보다 더 하락 — 화면 경고 기준 (점수 미사용) */
+    private String relativeHigh52wDropPercent;
+
     /** 최근 5거래일 수익률 (%) — 투자 순위 점수의 단기 눌림 요소. 가격 이력 부족 시 null */
     private Double return1wPct;
 

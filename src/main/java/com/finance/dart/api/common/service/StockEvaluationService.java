@@ -56,6 +56,7 @@ public class StockEvaluationService {
     private final StockPriceVolumeService stockPriceVolumeService;
     private final AnalystEstimatesService analystEstimatesService;
     private final FmpRateLimiter fmpRateLimiter;
+    private final BenchmarkDrawdownService benchmarkDrawdownService;   // 52주 하락률 시장 비교(표시용)
 
     /**
      * 종목 평가 (다건)
@@ -146,7 +147,10 @@ public class StockEvaluationService {
                 stockQuote, priceHistory,
                 estimates != null ? estimates.getEstimatedEpsAvg() : null,
                 EvaluationConst.QUALITY_GATE_MICROCAP, false);
-        return evaluate(symbol, inputs);
+        StockEvaluationResponse response = evaluate(symbol, inputs);
+        LocalDate today = LocalDate.now();      // fetchPriceHistory 와 같은 1년 창
+        benchmarkDrawdownService.applyUs(response, today.minusYears(1), today);
+        return response;
     }
 
     /**

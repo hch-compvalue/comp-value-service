@@ -194,6 +194,11 @@
 10. **진입 타이밍: 지지/저항선 → 20거래일 예상 변동 범위** (2026-10-19, 점수 계산 미변경)
    - 볼린저 하단·상단을 '예상 지지/저항선'으로 보여주던 것을 검증(미국 1,494종목 61만 관측, `../test/backtest-sr-2026-10`) → 볼린저·고저·변곡점·이평선 모두 같은 ATR 거리의 아무 가격선과 차이 없음
    - `EntryTimingAnalysis.range*`: 현재가 ± 2·ATR14, 20거래일 종가 이탈 36%·돌파 40%, 거리별 확률표(`PriceRangeConst`). `estimatedSupport/Resistance`는 @Deprecated(호환)
+11. **52주 고점 대비 하락 — 시장 비교 표시** (2026-11-06, 점수 계산 미변경)
+   - 하락장(11월 KOSPI 고점 대비 −36~−43%)에서는 고정 기준(−20%/−30%) 경고가 거의 모든 후보에 떠서 구분 불가
+   - `BenchmarkDrawdownService`: 같은 기간 기준 지수의 52주 고점 대비 하락률(미국 SPY — FMP 하루 1회 캐시, 국내 종목 거래소의 KOSPI·KOSDAQ — `tb_kr_index_daily` 고가·종가) → 응답 `benchmarkName`·`benchmarkHigh52wDropPercent`·`relativeHigh52wDropPercent`(= (1+종목)/(1+지수) − 1). 조회 실패 시 null(기존 표시로 폴백)
+   - 프론트 경고 기준은 상대 하락률 −20/−30%(`util/DrawdownUtil.js`) — 지수가 고점 근처면 기존과 동일. Step6 52주 하락 감점(−2/−4점)은 종목 하락률 그대로
+   - 근거(사후 탐색, 판정 아님): 국내 후보 안 고점에 가까울수록 12주 성과 나음(IC +0.096), 미국 후보 안은 무관 — 하락 종목이 더 오른다는 근거 없음
 - **효과(백테스트, V8 즉시수정본 대비)**: IC12 0.058(t3.4)→0.072(t4.6), IC24 0.093(t4.4)→0.111(t5.8), PER경로 IC12 0.026→0.053, 적정가≤0 10.8→4.5%, 괴리>200% 6.5→2.4%
 - **한계**: 2018~25 중소형 표본에서 가치 신호 자체가 약함(EBIT/EV IC12 0.079). 점수 구간별 수익은 V8·V9 모두 비단조 → 큰 수익 개선 기대 X, 이상값 감소가 주효과
 - **추가 필드**: CompanySharePriceCalculator `interestExpense`, `effectiveTaxRate` / ResultDetail `적용세율`, `이자비용`, `세후수익가치`
