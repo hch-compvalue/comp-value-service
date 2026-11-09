@@ -10,6 +10,7 @@ import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpMethod;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.HttpStatusCodeException;
+import org.springframework.web.client.ResourceAccessException;
 
 import java.util.Map;
 import java.util.regex.Pattern;
@@ -25,6 +26,11 @@ public class CointradeStrategyService {
 
     /** 즉시 실행은 주문 체결 확인까지 기다린다 (주식은 종목 3개 × 체결 확인·잔량 취소) */
     private static final int RUN_READ_TIMEOUT_MS = 180_000;
+
+    /** 트레이더 연결 실패·응답 지연(집 회선 지연 등) — 500 대신 안내 (2026-11-09) */
+    private static final String MSG_TRADER_UNREACHABLE = "자동매매 서버 응답 지연 — 잠시 후 다시 시도해 주세요";
+    /** 실행·긴급 매도는 트레이더에서 계속 진행 중일 수 있어 재시도 대신 기록 확인을 안내 (중복 주문 방지) */
+    private static final String MSG_TRADER_RUN_UNKNOWN = "자동매매 서버 응답 지연 — 주문이 진행됐을 수 있으니 실행 기록을 확인한 뒤 다시 시도하세요";
 
     private static final Pattern STRATEGY_ID = Pattern.compile(CoinTraderProgramConfig.STRATEGY_ID_PATTERN);
 
@@ -88,6 +94,9 @@ public class CointradeStrategyService {
             return httpClientComponent.exchangeSync(buildUrl(uri), method, null, body, MAP_TYPE).getBody();
         } catch (HttpStatusCodeException e) {
             throw new BizException(extractDetail(e));
+        } catch (ResourceAccessException e) {
+            log.warn("트레이더 응답 지연 [{} {}]: {}", method, uri, e.getMessage());
+            throw new BizException(MSG_TRADER_UNREACHABLE);
         }
     }
 
@@ -97,6 +106,9 @@ public class CointradeStrategyService {
                     RUN_READ_TIMEOUT_MS).getBody();
         } catch (HttpStatusCodeException e) {
             throw new BizException(extractDetail(e));
+        } catch (ResourceAccessException e) {
+            log.warn("트레이더 실행 응답 지연 [POST {}]: {}", uri, e.getMessage());
+            throw new BizException(MSG_TRADER_RUN_UNKNOWN);
         }
     }
 
