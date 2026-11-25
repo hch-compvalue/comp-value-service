@@ -53,6 +53,9 @@ public class KrPriceJdbcRepository {
                     + "WHERE stock_code = ? AND trade_date >= ? ORDER BY trade_date";
     private static final String SELECT_INDEX_HIGH_CLOSES =
             "SELECT trade_date, high_value, close_value FROM tb_kr_index_daily WHERE index_code = ? AND trade_date >= ? ORDER BY trade_date";
+    private static final String SELECT_INDEX_BARS =
+            "SELECT trade_date, open_value, high_value, low_value, close_value FROM tb_kr_index_daily "
+                    + "WHERE index_code = ? AND trade_date >= ? ORDER BY trade_date";
     private static final String SELECT_INDEX_CLOSES =
             "SELECT trade_date, close_value FROM tb_kr_index_daily WHERE index_code = ? AND trade_date >= ? ORDER BY trade_date";
 
@@ -68,6 +71,12 @@ public class KrPriceJdbcRepository {
     public List<KrDailyBar> findDailyBars(String stockCode, LocalDate from) {
         return jdbcTemplate.query(SELECT_DAILY_BARS, (rs, i) -> new KrDailyBar(rs.getDate(1).toLocalDate(),
                 rs.getInt(2), rs.getInt(3), rs.getInt(4), rs.getInt(5), rs.getLong(6), rs.getLong(7)), stockCode, Date.valueOf(from));
+    }
+
+    /** 지수 일봉 시가·고가·저가·종가 (from 이후, 날짜 오름차순) — 홈 국내 지수 차트 */
+    public List<KrIndexBar> findIndexBars(String indexCode, LocalDate from) {
+        return jdbcTemplate.query(SELECT_INDEX_BARS, (rs, i) -> new KrIndexBar(rs.getDate(1).toLocalDate(),
+                rs.getBigDecimal(2), rs.getBigDecimal(3), rs.getBigDecimal(4), rs.getBigDecimal(5)), indexCode, Date.valueOf(from));
     }
 
     /** 지수 종가 (from 이후, 날짜 오름차순) */
