@@ -94,6 +94,17 @@ public class PrometheusQueryService {
             log.debug("Prometheus CPU Limit 메트릭 조회 실패: {}", e.getMessage());
         }
 
+        // 컨테이너 시작 시각 — 파드 생성 시각과 달리 재시작(PC 재부팅 등)하면 갱신됨
+        Map<String, Double> startedMap = Map.of();
+        try {
+            startedMap = queryVector(
+                    "max by (pod) (kube_pod_container_state_started{namespace=\"" + namespace + "\"})",
+                    "pod"
+            );
+        } catch (Exception e) {
+            log.debug("Prometheus 컨테이너 시작 시각 조회 실패: {}", e.getMessage());
+        }
+
         // Running 상태 pod만 필터링 — 종료된 pod 찌꺼기 제거
         Set<String> runningPods = Set.of();
         try {
@@ -125,6 +136,7 @@ public class PrometheusQueryService {
                     .cpuLimitCores(cpuLimitMap.getOrDefault(pod, 0.0))
                     .memoryMB(Math.round(memMap.getOrDefault(pod, 0.0) / 1024 / 1024))
                     .memoryLimitMB(Math.round(memLimitMap.getOrDefault(pod, 0.0) / 1024 / 1024))
+                    .startedAt(Math.round(startedMap.getOrDefault(pod, 0.0)))
                     .build());
         }
 
